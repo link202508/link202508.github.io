@@ -166,7 +166,7 @@ async function loop() {
         const ratio = qrSideOnRoi / roiSide;           // == qrSideOnTarget / target（数学等价，但语义上更清晰：和扫描框比）
 
         gating.className = (ratio < THRESH && ratio >= MIN_OK) ? 'badge ok' : 'badge warn';
-        // gating.textContent = `已检测到二维码 · 占比 ${(ratio * 100).toFixed(1)}%（阈值 < 30%）`;
+        gating.textContent = `已检测到二维码 · 占比 ${(ratio * 100).toFixed(1)}%（阈值 < 30%）`;
         tips.textContent = (ratio >= THRESH) ? '二维码过大，请拉远' :
             (ratio < MIN_OK) ? '二维码过小，稍微靠近' : '保持此距离…';
 
