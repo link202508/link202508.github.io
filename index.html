@@ -162,6 +162,8 @@
 </head>
 <body>
     <div class="container">
+        <h1 style="color: white; margin-bottom: 40px; font-size: 2.5em; text-shadow: 2px 2px 4px rgba(0,0,0,0.3);">二维码扫描器</h1>
+        
         <button class="scan-button" onclick="startScan()">📱 点击扫描</button>
         
         <div class="result" id="result">
@@ -323,18 +325,30 @@
                 
                 if (code) {
                     console.log('扫描到二维码:', code.data);
+                    console.log('二维码位置信息:', code.location);
                     status.textContent = '扫描成功！';
                     
                     // 保存扫描结果
                     lastQRData = code.data;
                     
-                    // 创建二维码图片的base64
-                    createQRImage(code);
+                    // 停止扫描循环
+                    isScanning = false;
                     
-                    // 延迟关闭扫描界面
+                    // 创建二维码图片的base64
+                    try {
+                        createQRImage(code);
+                        console.log('图片创建成功');
+                    } catch (error) {
+                        console.error('图片创建失败:', error);
+                        // 即使图片创建失败，也显示文本结果
+                        lastQRImage = null;
+                    }
+                    
+                    // 延迟关闭扫描界面并显示结果
                     setTimeout(() => {
                         stopScan();
                         showResult(code.data);
+                        console.log('结果已显示');
                     }, 1000);
                     
                     return;
@@ -346,45 +360,95 @@
 
         // 创建二维码区域图片
         function createQRImage(code) {
-            const qrCanvas = document.getElementById('qr-image');
-            const qrContext = qrCanvas.getContext('2d');
-            
-            // 获取二维码区域
-            const { location } = code;
-            const minX = Math.min(...location.map(p => p.x));
-            const minY = Math.min(...location.map(p => p.y));
-            const maxX = Math.max(...location.map(p => p.x));
-            const maxY = Math.max(...location.map(p => p.y));
-            
-            const width = maxX - minX;
-            const height = maxY - minY;
-            const padding = 20;
-            
-            qrCanvas.width = width + padding * 2;
-            qrCanvas.height = height + padding * 2;
-            
-            // 绘制白色背景
-            qrContext.fillStyle = 'white';
-            qrContext.fillRect(0, 0, qrCanvas.width, qrCanvas.height);
-            
-            // 绘制二维码区域
-            qrContext.drawImage(
-                canvas,
-                minX - padding, minY - padding, width + padding * 2, height + padding * 2,
-                0, 0, qrCanvas.width, qrCanvas.height
-            );
-            
-            // 保存base64图片
-            lastQRImage = qrCanvas.toDataURL('image/png');
+            try {
+                const qrCanvas = document.getElementById('qr-image');
+                if (!qrCanvas) {
+                    console.error('找不到qr-image canvas元素');
+                    return;
+                }
+                
+                const qrContext = qrCanvas.getContext('2d');
+                
+                // 检查二维码位置信息
+                if (!code.location || code.location.length < 4) {
+                    console.error('二维码位置信息不完整');
+                    // 使用整个画布作为后备方案
+                    qrCanvas.width = canvas.width;
+                    qrCanvas.height = canvas.height;
+                    qrContext.drawImage(canvas, 0, 0);
+                    lastQRImage = qrCanvas.toDataURL('image/png');
+                    console.log('使用全图作为后备方案');
+                    return;
+                }
+                
+                // 获取二维码区域
+                const { location } = code;
+                const minX = Math.min(...location.map(p => p.x));
+                const minY = Math.min(...location.map(p => p.y));
+                const maxX = Math.max(...location.map(p => p.x));
+                const maxY = Math.max(...location.map(p => p.y));
+                
+                const width = maxX - minX;
+                const height = maxY - minY;
+                const padding = 20;
+                
+                console.log('二维码区域:', { minX, minY, maxX, maxY, width, height });
+                
+                qrCanvas.width = width + padding * 2;
+                qrCanvas.height = height + padding * 2;
+                
+                // 绘制白色背景
+                qrContext.fillStyle = 'white';
+                qrContext.fillRect(0, 0, qrCanvas.width, qrCanvas.height);
+                
+                // 绘制二维码区域
+                qrContext.drawImage(
+                    canvas,
+                    minX - padding, minY - padding, width + padding * 2, height + padding * 2,
+                    0, 0, qrCanvas.width, qrCanvas.height
+                );
+                
+                // 保存base64图片
+                lastQRImage = qrCanvas.toDataURL('image/png');
+                console.log('Base64图片生成成功，长度:', lastQRImage.length);
+                
+            } catch (error) {
+                console.error('创建二维码图片失败:', error);
+                lastQRImage = null;
+            }
         }
 
         // 显示结果
         function showResult(qrData) {
-            document.getElementById('qr-text').textContent = qrData;
-            result.style.display = 'block';
+            console.log('开始显示结果:', qrData);
+            
+            const qrTextElement = document.getElementById('qr-text');
+            const resultElement = document.getElementById('result');
+            
+            if (!qrTextElement) {
+                console.error('找不到qr-text元素');
+                return;
+            }
+            
+            if (!resultElement) {
+                console.error('找不到result元素');
+                return;
+            }
+            
+            // 设置文本内容
+            qrTextElement.textContent = qrData;
+            console.log('文本内容已设置:', qrData);
+            
+            // 显示结果区域
+            resultElement.style.display = 'block';
+            console.log('结果区域已显示');
             
             // 滚动到结果区域
-            result.scrollIntoView({ behavior: 'smooth' });
+            resultElement.scrollIntoView({ behavior: 'smooth' });
+            console.log('滚动到结果区域');
+            
+            // 显示成功提示
+            alert('扫描成功！结果: ' + qrData.substring(0, 50) + (qrData.length > 50 ? '...' : ''));
         }
 
         // 下载图片
@@ -430,6 +494,25 @@
             if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
                 alert('您的浏览器不支持摄像头访问功能');
             }
+            
+            // 检查jsQR库是否加载
+            if (typeof jsQR === 'undefined') {
+                console.error('jsQR库未加载！');
+                alert('jsQR库加载失败，请检查网络连接');
+            } else {
+                console.log('jsQR库加载成功');
+            }
+            
+            // 添加测试按钮（仅用于调试）
+            const testButton = document.createElement('button');
+            testButton.textContent = '📝 测试显示结果';
+            testButton.className = 'control-button';
+            testButton.style.marginTop = '20px';
+            testButton.onclick = () => {
+                console.log('测试显示结果');
+                showResult('测试二维码内容: https://example.com/test');
+            };
+            document.querySelector('.container').appendChild(testButton);
         });
     </script>
 </body>
