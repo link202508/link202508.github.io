@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>test</title>
+  <link rel="stylesheet" href="scan.css" />
+</head>
+
+<body>
+  <button id="start-btn" onclick="init()">开始扫描</button>
+  <div id="container" style="display:none">
+    <div id="blocker" class="blocker"></div>
+    <div id="root" class="wrap">
+      <video id="v" autoplay playsinline muted></video>
+      <div class="mask" id="mask"></div>
+      <div class="roi">
+        <div class="box" id="roiBox"></div>
+      </div>
+
+      <div class="tips" id="tips">把实物放入小框内；检测到二维码会提示，满足门槛（&lt;30%）才拍照</div>
+
+      <div class="panel">
+        <div id="engine" class="badge" style="display: none;">引擎：初始化中…</div>
+        <div id="meta" class="badge" style="display: none;"></div>
+        <div id="gating" class="badge warn"></div>
+      </div>
+
+      <div id="result" class="result"></div>
+
+      <div class="toolbar" style="display: none;">
+        <button id="toggleFacing">切换前/后置</button>
+        <button id="torch">手电筒</button>
+        <button id="resume" style="display:none">继续扫描</button>
+      </div>
+
+      <div id="gallery" class="gallery"></div>
+    </div>
+  </div>
+  <script src="scan.js"></script>
+</body>
+
+</html>
