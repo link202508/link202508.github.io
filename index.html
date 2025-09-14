@@ -162,8 +162,6 @@
 </head>
 <body>
     <div class="container">
-        <h1 style="color: white; margin-bottom: 40px; font-size: 2.5em; text-shadow: 2px 2px 4px rgba(0,0,0,0.3);">二维码扫描器</h1>
-        
         <button class="scan-button" onclick="startScan()">📱 点击扫描</button>
         
         <div class="result" id="result">
@@ -214,6 +212,19 @@
                 const devices = await navigator.mediaDevices.enumerateDevices();
                 cameras = devices.filter(device => device.kind === 'videoinput');
                 console.log('发现摄像头:', cameras.length);
+                
+                // 查找后置摄像头并设置为默认
+                for (let i = 0; i < cameras.length; i++) {
+                    const camera = cameras[i];
+                    // 检查摄像头标签是否包含后置相关关键词
+                    if (camera.label.toLowerCase().includes('back') || 
+                        camera.label.toLowerCase().includes('rear') || 
+                        camera.label.toLowerCase().includes('environment')) {
+                        currentCameraIndex = i;
+                        console.log('找到后置摄像头:', camera.label);
+                        break;
+                    }
+                }
             } catch (error) {
                 console.error('获取摄像头列表失败:', error);
             }
@@ -227,18 +238,35 @@
                 // 优先选择后置摄像头（广角模式）
                 let constraints = {
                     video: {
-                        facingMode: 'environment', // 后置摄像头
+                        facingMode: { ideal: 'environment' }, // 强制优先后置摄像头
                         width: { ideal: 1280 },
                         height: { ideal: 720 }
                     }
                 };
 
-                // 如果有多个摄像头，尝试使用指定的摄像头
-                if (cameras.length > 0) {
-                    constraints.video.deviceId = cameras[currentCameraIndex].deviceId;
+                // 如果识别到具体的后置摄像头，直接指定设备ID
+                if (cameras.length > 0 && currentCameraIndex < cameras.length) {
+                    // 组合使用：既指定facingMode又指定具体设备
+                    constraints.video.deviceId = { exact: cameras[currentCameraIndex].deviceId };
+                    console.log('使用摄像头:', cameras[currentCameraIndex].label);
                 }
 
-                currentStream = await navigator.mediaDevices.getUserMedia(constraints);
+                // 尝试启动摄像头
+                try {
+                    currentStream = await navigator.mediaDevices.getUserMedia(constraints);
+                } catch (error) {
+                    console.warn('无法使用指定设备ID，尝试使用facingMode:', error);
+                    // 如果指定设备ID失败，回退到只使用facingMode
+                    constraints = {
+                        video: {
+                            facingMode: { ideal: 'environment' },
+                            width: { ideal: 1280 },
+                            height: { ideal: 720 }
+                        }
+                    };
+                    currentStream = await navigator.mediaDevices.getUserMedia(constraints);
+                }
+
                 video.srcObject = currentStream;
                 
                 scannerContainer.style.display = 'block';
