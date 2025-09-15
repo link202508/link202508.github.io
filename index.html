@@ -13,7 +13,7 @@
 </head>
 
 <body>
-  <button id="start-btn">开始扫描11</button>
+  <button id="start-btn">开始扫描12</button>
   
   <!-- 拍照结果显示区域 -->
   <div class="photo-result" id="photo-result" style="display: none;">
@@ -80,38 +80,24 @@
         audio: false, // 不需要音频
         video: {
           focusMode: "continuous", // 自动调焦模式
-          // 明确指定使用后置摄像头
-          facingMode: { exact: "environment" },
-          // 使用4K分辨率，既用于扫码也用于拍照
-          width: { ideal: 3840, min: 1920 },
-          height: { ideal: 2160, min: 1080 },
+          facingMode: "environment", // 使用后置摄像头
+          width: 800,
+          height: 800,
         }
       }).then(function (videoStream) {
         stream = videoStream
         video.srcObject = videoStream;
 
         // 获取视频轨道
-        const videoTrack = videoStream.getVideoTracks()[0];
-        const capabilities = videoTrack.getCapabilities();
-        const settings = videoTrack.getSettings();
-        
-        console.log('扫码摄像头设置:', settings);
-        
-        // 检查是否正确使用后置摄像头
-        if (settings.facingMode === 'user') {
-          console.warn('警告：扫码使用的是前置摄像头！');
-        } else {
-          console.log('正确：扫码使用后置摄像头');
-        }
-        
-        // 设置广角模式用于拍照
+        const track = videoStream.getVideoTracks()[0];
+        const capabilities = track.getCapabilities();
         if (capabilities.zoom) {
-          // 设置新的变焦值为最小值（广角模式）
-          videoTrack.applyConstraints({ advanced: [{ zoom: {
+          // 设置广角模式用于拍照
+          track.applyConstraints({ advanced: [{ zoom: {
             ideal: capabilities.zoom.min || 1
           } }] })
             .then(() => {
-              console.log('已设置为广角模式，用于扫码和拍照');
+              console.log('已设置为广角模式');
             })
             .catch(e => {
               console.error('设置广角模式失败:', e);
@@ -138,17 +124,17 @@
               video: {
                 focusMode: "continuous",
                 facingMode: "environment", // 普通后置摄像头设置
-                width: { ideal: 3840, min: 1920 },
-                height: { ideal: 2160, min: 1080 },
+                width: 800,
+                height: 800,
               }
             }).then(function (videoStream) {
               video.srcObject = videoStream;
               
-              const backupTrack = videoStream.getVideoTracks()[0];
-              const backupCapabilities = backupTrack.getCapabilities();
-              if (backupCapabilities.zoom) {
-                backupTrack.applyConstraints({ advanced: [{ zoom: {
-                  ideal: backupCapabilities.zoom.min || 1
+              const track = videoStream.getVideoTracks()[0];
+              const capabilities = track.getCapabilities();
+              if (capabilities.zoom) {
+                track.applyConstraints({ advanced: [{ zoom: {
+                  ideal: capabilities.zoom.min || 1
                 } }] })
                   .then(() => {
                     console.log('备用模式下已设置为广角模式');
