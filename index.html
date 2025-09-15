@@ -13,7 +13,7 @@
 </head>
 
 <body>
-  <button id="start-btn">开始扫描9</button>
+  <button id="start-btn">开始扫描10</button>
   
   <!-- 拍照结果显示区域 -->
   <div class="photo-result" id="photo-result" style="display: none;">
@@ -287,18 +287,41 @@
       document.querySelector('.reader-wrap').style.display = 'flex'
       showLoading()
       
-      navigator.mediaDevices.getUserMedia({
-        audio: false,
-        video: {
-          // 明确指定使用后置摄像头
-          facingMode: { exact: "environment" },
-          // 使用4K分辨率获得最高质量
-          width: { ideal: 3840, min: 1920 },
-          height: { ideal: 2160, min: 1080 },
-          // 广角模式设置
-          zoom: { ideal: 1 }, // 最小缩放，获得最广角度
-          focusMode: "continuous"
+      // 首先尝试获取所有可用摄像头，确保选择后置摄像头
+      navigator.mediaDevices.enumerateDevices().then(devices => {
+        const videoDevices = devices.filter(device => device.kind === 'videoinput');
+        alert('所有可用摄像头:', videoDevices);
+        
+        // 查找后置摄像头
+        const backCamera = videoDevices.find(device => 
+          device.label.toLowerCase().includes('back') || 
+          device.label.toLowerCase().includes('rear') ||
+          device.label.toLowerCase().includes('environment')
+        );
+        
+        let constraints = {
+          audio: false,
+          video: {
+            // 使用4K分辨率获得最高质量
+            width: { ideal: 3840, min: 1920 },
+            height: { ideal: 2160, min: 1080 },
+            // 广角模式设置
+            zoom: { ideal: 1 }, // 最小缩放，获得最广角度
+            focusMode: "continuous"
+          }
+        };
+        
+        // 如果找到了后置摄像头，优先使用设备ID
+        if (backCamera) {
+          console.log('找到后置摄像头:', backCamera.label);
+          constraints.video.deviceId = { exact: backCamera.deviceId };
+        } else {
+          // 否则使用facingMode
+          console.log('未找到后置摄像头，使用facingMode');
+          constraints.video.facingMode = { exact: "environment" };
         }
+        
+        return navigator.mediaDevices.getUserMedia(constraints);
       }).then(function (videoStream) {
         photoStream = videoStream
         photoVideo.srcObject = videoStream;
@@ -306,6 +329,18 @@
         // 获取视频轨道并设置广角
         const track = videoStream.getVideoTracks()[0];
         const capabilities = track.getCapabilities();
+        const settings = track.getSettings();
+        
+        console.log('当前摄像头设置:', settings);
+        console.log('摄像头能力:', capabilities);
+        
+        // 检查是否使用了后置摄像头
+        if (settings.facingMode === 'user') {
+          console.warn('警告：当前使用的是前置摄像头！');
+          message('警告：当前使用的是前置摄像头');
+        } else {
+          console.log('正确：使用后置摄像头');
+        }
         
         // 设置为广角模式（最小缩放）
         if (capabilities.zoom) {
@@ -338,58 +373,65 @@
         requestAnimationFrame(renderPhotoPreview)
         
       }).catch(err => {
-        console.error(err)
-        // 如果严格要求后置摄像头失败，尝试普通后置摄像头设置
-        if (err.name === 'OverconstrainedError' || err.name === 'NotFoundError') {
-          console.log('严格后置摄像头模式失败，尝试普通后置摄像头模式')
-          return navigator.mediaDevices.getUserMedia({
-            audio: false,
-            video: {
-              facingMode: "environment", // 普通后置摄像头设置
-              width: { ideal: 3840, min: 1920 },
-              height: { ideal: 2160, min: 1080 },
-              zoom: { ideal: 1 },
-              focusMode: "continuous"
-            }
-          }).then(function (videoStream) {
-            console.log('使用普通后置摄像头模式成功')
-            // 相同的处理逻辑
-            photoStream = videoStream
-            photoVideo.srcObject = videoStream;
-            
-            const track = videoStream.getVideoTracks()[0];
-            const capabilities = track.getCapabilities();
-            
-            if (capabilities.zoom) {
-              track.applyConstraints({ 
-                advanced: [{ 
-                  zoom: { ideal: capabilities.zoom.min || 1 } 
-                }] 
-              }).then(() => {
-                console.log('已设置为广角模式');
-              }).catch(e => {
-                console.error('设置广角模式失败:', e);
-              });
-            }
-            
-            photoVideo.setAttribute("playsinline", true);
-            photoVideo.setAttribute('webkit-playsinline', 'true');
-            photoVideo.play();
-            
-            hideLoading()
-            
-            photoVideo.addEventListener('loadeddata', () => {
-              setTimeout(() => {
-                autoCapture()
-              }, 300)
-            })
-            
-            requestAnimationFrame(renderPhotoPreview)
+        console.error('第一次尝试失败:', err)
+        // 如果上面失败，尝试使用普通的facingMode设置
+        console.log('尝试普通后置摄像头模式');
+        return navigator.mediaDevices.getUserMedia({
+          audio: false,
+          video: {
+            facingMode: "environment", // 普通后置摄像头设置
+            width: { ideal: 3840, min: 1920 },
+            height: { ideal: 2160, min: 1080 },
+            zoom: { ideal: 1 },
+            focusMode: "continuous"
+          }
+        }).then(function (videoStream) {
+          console.log('使用普通后置摄像头模式成功')
+          // 相同的处理逻辑
+          photoStream = videoStream
+          photoVideo.srcObject = videoStream;
+          
+          const track = videoStream.getVideoTracks()[0];
+          const capabilities = track.getCapabilities();
+          const settings = track.getSettings();
+          
+          console.log('第二次尝试摄像头设置:', settings);
+          
+          if (settings.facingMode === 'user') {
+            console.error('仍然是前置摄像头！设备可能没有后置摄像头');
+            message('设备没有后置摄像头，使用前置摄像头拍照');
+          }
+          
+          if (capabilities.zoom) {
+            track.applyConstraints({ 
+              advanced: [{ 
+                zoom: { ideal: capabilities.zoom.min || 1 } 
+              }] 
+            }).then(() => {
+              console.log('已设置为广角模式');
+            }).catch(e => {
+              console.error('设置广角模式失败:', e);
+            });
+          }
+          
+          photoVideo.setAttribute("playsinline", true);
+          photoVideo.setAttribute('webkit-playsinline', 'true');
+          photoVideo.play();
+          
+          hideLoading()
+          
+          photoVideo.addEventListener('loadeddata', () => {
+            setTimeout(() => {
+              autoCapture()
+            }, 300)
           })
-        }
-        
-        message('启动广角拍照失败，请重试')
-        hideLoading()
+          
+          requestAnimationFrame(renderPhotoPreview)
+        }).catch(err2 => {
+          console.error('第二次尝试也失败:', err2);
+          message('启动摄像头失败，请检查权限设置');
+          hideLoading();
+        });
       })
     }
     
