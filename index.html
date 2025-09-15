@@ -13,7 +13,7 @@
 </head>
 
 <body>
-  <button id="start-btn">开始扫描</button>
+  <button id="start-btn">开始扫描1</button>
 
   <div class="reader-wrap">
     <div style="position: relative;width: 160px;height: 160px;">
@@ -86,49 +86,135 @@
       showLoading()
 
       document.querySelector('.reader-wrap').style.display = 'flex'
-      navigator.mediaDevices.getUserMedia({
-        audio: false, // 不需要音频
+      
+      // 尝试最高分辨率4K广角模式
+      const highResConstraints = {
+        audio: false,
         video: {
-          focusMode: "continuous", // 自动调焦模式
-          facingMode: "environment", // 使用后置摄像头
+          focusMode: "continuous",
+          facingMode: "environment",
+          width: { ideal: 4096, max: 4096 },
+          height: { ideal: 4096, max: 4096 },
+          aspectRatio: 1.0,
+          frameRate: { ideal: 30, max: 60 }
+        }
+      };
+      
+      // 降级方案：普通分辨率
+      const fallbackConstraints = {
+        audio: false,
+        video: {
+          focusMode: "continuous",
+          facingMode: "environment",
+          width: { ideal: 1920, max: 1920 },
+          height: { ideal: 1920, max: 1920 },
+          aspectRatio: 1.0
+        }
+      };
+      
+      // 最终降级方案
+      const basicConstraints = {
+        audio: false,
+        video: {
+          facingMode: "environment",
           width: 800,
-          height: 800,
+          height: 800
         }
-      }).then(function (videoStream) {
-        stream = videoStream // 保存流引用
-        video.srcObject = videoStream;
+      };
 
-        // 获取视频轨道
-        const track = videoStream.getVideoTracks()[0];
-
-        const capabilities = track.getCapabilities();
-        if (capabilities.zoom) {
-          // 设置缩放为最小值以获得最大视野
-          const minZoom = capabilities.zoom.min || 1;
-          track.applyConstraints({ advanced: [{ zoom: minZoom }] })
-            .then(() => {
-              console.log('缩放设置成功，使用最小缩放值:', minZoom);
-            })
-            .catch(e => {
-              console.error('设置缩放失败:', e);
-            });
-        } else {
-          console.log('该设备不支持缩放功能。');
-        }
-
-        // 让 safari 浏览器不进入全屏
-        video.setAttribute("playsinline", true);
-        video.setAttribute('webkit-playsinline', 'true');
-
-        video.play();
-        requestAnimationFrame(renderVideo);
-        hideLoading()
-      })
-        .catch(err => {
-          console.error(err)
-          message('您需要授予相机访问权限')
-          isScanning = false
+      // 尝试获取最高分辨率
+      navigator.mediaDevices.getUserMedia(highResConstraints)
+        .then(handleVideoStream)
+        .catch(error => {
+          console.warn('高分辨率4K失败，尝试降级方案:', error.message);
+          // 尝试中等分辨率
+          return navigator.mediaDevices.getUserMedia(fallbackConstraints);
         })
+        .then(handleVideoStream)
+        .catch(error => {
+          console.warn('中等分辨率失败，使用基本分辨率:', error.message);
+          // 最终降级方案
+          return navigator.mediaDevices.getUserMedia(basicConstraints);
+        })
+        .then(handleVideoStream)
+        .catch(err => {
+          console.error('所有分辨率都失败:', err);
+          message('无法访问相机，请检查权限设置');
+          isScanning = false;
+        });
+    }
+    
+    /** 处理视频流 */
+    function handleVideoStream(videoStream) {
+      if (!videoStream) return Promise.reject(new Error('没有获取到视频流'));
+      
+      stream = videoStream; // 保存流引用
+      video.srcObject = videoStream;
+
+      // 获取视频轨道
+      const track = videoStream.getVideoTracks()[0];
+      const capabilities = track.getCapabilities();
+      const settings = track.getSettings();
+      
+      console.log('摄像头能力:', capabilities);
+      console.log('当前设置:', settings);
+      console.log('当前分辨率:', settings.width, 'x', settings.height);
+      
+      // 应用广角模式约束
+      const constraints = { advanced: [] };
+      
+      // 设置缩放为最小值以获得最大视野（广角效果）
+      if (capabilities.zoom) {
+        const minZoom = capabilities.zoom.min || 1;
+        constraints.advanced.push({ zoom: minZoom });
+        console.log('设置最小缩放值（广角模式）:', minZoom);
+      }
+      
+      // 设置焦距为最小值以获得广角效果
+      if (capabilities.focusDistance) {
+        const minFocusDistance = capabilities.focusDistance.min;
+        constraints.advanced.push({ focusDistance: minFocusDistance });
+        console.log('设置最小焦距（广角模式）:', minFocusDistance);
+      }
+      
+      // 如果支持视野角度设置
+      if (capabilities.fieldOfView) {
+        const maxFOV = capabilities.fieldOfView.max;
+        constraints.advanced.push({ fieldOfView: maxFOV });
+        console.log('设置最大视野角度（广角模式）:', maxFOV);
+      }
+      
+      // 应用约束
+      if (constraints.advanced.length > 0) {
+        track.applyConstraints(constraints)
+          .then(() => {
+            console.log('广角模式设置成功');
+            const newSettings = track.getSettings();
+            console.log('新的摄像头设置:', newSettings);
+          })
+          .catch(e => {
+            console.error('设置广角模式失败:', e);
+            // 回退到基本设置
+            if (capabilities.zoom) {
+              const minZoom = capabilities.zoom.min || 1;
+              track.applyConstraints({ advanced: [{ zoom: minZoom }] })
+                .then(() => console.log('回退设置成功'))
+                .catch(err => console.error('回退设置失败:', err));
+            }
+          });
+      } else {
+        console.log('该设备不支持高级摄像头控制功能。');
+      }
+
+      // 让 safari 浏览器不进入全屏
+      video.setAttribute("playsinline", true);
+      video.setAttribute('webkit-playsinline', 'true');
+
+      video.play();
+      requestAnimationFrame(renderVideo);
+      hideLoading();
+      
+      return Promise.resolve(videoStream);
     }
 
     /** 扫描成功回调 */
@@ -141,7 +227,7 @@
       clearMessage()
       
       // 立即拍照
-      message('扫描成功，正在拍照...')
+      message('扫描成功，正在使用广角模式拍照...')
       setTimeout(() => {
         capturePhoto()
         stopScan()
@@ -191,24 +277,27 @@
       }
     }
 
-    /** 拍照功能 */
+    /** 拍照功能 - 使用广角模式 */
     function capturePhoto() {
       try {
-        // 生成base64格式图片
-        const imageDataURL = canvasEle.toDataURL('image/png', 0.9);
+        // 确保使用当前摄像头流的最高质量进行拍照
+        // 由于已经在扫码时配置了广角模式，这里直接使用当前canvas内容
+        
+        // 生成高质量base64格式图片
+        const imageDataURL = canvasEle.toDataURL('image/png', 1.0); // 使用最高质量
         
         // 显示拍照结果
         showPhotoResult(imageDataURL);
         
-        message('拍照成功！')
+        message('广角拍照成功！')
         
-        // 可选：同时生成Blob用于上传
+        // 同时生成高质量Blob用于上传
         canvasEle.toBlob((blob) => {
           if (blob) {
-            console.log('生成的图片Blob:', blob);
+            console.log('生成的高质量图片Blob:', blob, '大小:', (blob.size / 1024 / 1024).toFixed(2) + 'MB');
             // TODO: 这里可以添加上传到服务器的逻辑
           }
-        }, 'image/png', 0.9);
+        }, 'image/png', 1.0); // 使用最高质量
         
       } catch (error) {
         console.error('拍照失败:', error);
