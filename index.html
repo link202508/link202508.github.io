@@ -13,7 +13,7 @@
 </head>
 
 <body>
-  <button id="start-btn">开始扫描10</button>
+  <button id="start-btn">开始扫描11</button>
   
   <!-- 拍照结果显示区域 -->
   <div class="photo-result" id="photo-result" style="display: none;">
@@ -56,8 +56,6 @@
     })
     let stream = null
     let video = null
-    let photoStream = null
-    let photoVideo = null
     /** 二维码面积占比限制, 只有占比小于这个值的二维码才会被扫描， 最大值为1 */
     const RatioLimit = 0.03
 
@@ -84,30 +82,39 @@
           focusMode: "continuous", // 自动调焦模式
           // 明确指定使用后置摄像头
           facingMode: { exact: "environment" },
-          width: 800,
-          height: 800,
+          // 使用4K分辨率，既用于扫码也用于拍照
+          width: { ideal: 3840, min: 1920 },
+          height: { ideal: 2160, min: 1080 },
         }
       }).then(function (videoStream) {
+        stream = videoStream
         video.srcObject = videoStream;
 
         // 获取视频轨道
-        const track = videoStream.getVideoTracks()[0];
-
-        const capabilities = track.getCapabilities();
+        const videoTrack = videoStream.getVideoTracks()[0];
+        const capabilities = videoTrack.getCapabilities();
+        const settings = videoTrack.getSettings();
+        
+        console.log('扫码摄像头设置:', settings);
+        
+        // 检查是否正确使用后置摄像头
+        if (settings.facingMode === 'user') {
+          console.warn('警告：扫码使用的是前置摄像头！');
+        } else {
+          console.log('正确：扫码使用后置摄像头');
+        }
+        
+        // 设置广角模式用于拍照
         if (capabilities.zoom) {
-          // 获取当前变焦值
-          const zoom = track.getSettings().zoom;
-          // 设置新的变焦值
-          track.applyConstraints({ advanced: [{ zoom: {
-            min: 2,
-            ideal: 3,
-            max: 3.5
+          // 设置新的变焦值为最小值（广角模式）
+          videoTrack.applyConstraints({ advanced: [{ zoom: {
+            ideal: capabilities.zoom.min || 1
           } }] })
             .then(() => {
-              console.log('变焦已成功');
+              console.log('已设置为广角模式，用于扫码和拍照');
             })
             .catch(e => {
-              console.error('设置变焦失败:', e);
+              console.error('设置广角模式失败:', e);
             });
         } else {
           console.log('该设备不支持变焦功能。');
@@ -131,28 +138,26 @@
               video: {
                 focusMode: "continuous",
                 facingMode: "environment", // 普通后置摄像头设置
-                width: 800,
-                height: 800,
+                width: { ideal: 3840, min: 1920 },
+                height: { ideal: 2160, min: 1080 },
               }
             }).then(function (videoStream) {
               video.srcObject = videoStream;
               
-              const track = videoStream.getVideoTracks()[0];
-              const capabilities = track.getCapabilities();
-              if (capabilities.zoom) {
-                track.applyConstraints({ advanced: [{ zoom: {
-                  min: 2,
-                  ideal: 3,
-                  max: 3.5
+              const backupTrack = videoStream.getVideoTracks()[0];
+              const backupCapabilities = backupTrack.getCapabilities();
+              if (backupCapabilities.zoom) {
+                backupTrack.applyConstraints({ advanced: [{ zoom: {
+                  ideal: backupCapabilities.zoom.min || 1
                 } }] })
                   .then(() => {
-                    console.log('变焦已成功');
+                    console.log('备用模式下已设置为广角模式');
                   })
                   .catch(e => {
-                    console.error('设置变焦失败:', e);
+                    console.error('备用模式下设置广角模式失败:', e);
                   });
               } else {
-                console.log('该设备不支持变焦功能。');
+                console.log('备用模式下设备不支持变焦功能。');
               }
               
               video.setAttribute("playsinline", true);
@@ -175,10 +180,10 @@
         return
       }
       clearMessage()
-      // message('扫码成功，正在启动广角拍照...')
-      stopScan()
-      // 立即启动拍照
-      startWideAnglePhotoAndInstantCapture()
+      message('扫码成功，正在拍照...')
+      
+      // 不停止扫描，直接使用当前的摄像头流进行拍照
+      capturePhotoFromCurrentStream()
     }
 
     function detectQRCodeFn() {
@@ -279,184 +284,13 @@
       document.querySelector('.reader-wrap').style.display = 'none'
     }
     
-    /** 启动广角拍照模式并立即拍照 */
-    function startWideAnglePhotoAndInstantCapture() {
-      photoVideo = document.createElement("video");
-      
-      // 显示拍照界面
-      document.querySelector('.reader-wrap').style.display = 'flex'
-      showLoading()
-      
-      // 首先尝试获取所有可用摄像头，确保选择后置摄像头
-      navigator.mediaDevices.enumerateDevices().then(devices => {
-        const videoDevices = devices.filter(device => device.kind === 'videoinput');
-        alert('所有可用摄像头:', videoDevices);
-        
-        // 查找后置摄像头
-        const backCamera = videoDevices.find(device => 
-          device.label.toLowerCase().includes('back') || 
-          device.label.toLowerCase().includes('rear') ||
-          device.label.toLowerCase().includes('environment')
-        );
-        
-        let constraints = {
-          audio: false,
-          video: {
-            // 使用4K分辨率获得最高质量
-            width: { ideal: 3840, min: 1920 },
-            height: { ideal: 2160, min: 1080 },
-            // 广角模式设置
-            zoom: { ideal: 1 }, // 最小缩放，获得最广角度
-            focusMode: "continuous"
-          }
-        };
-        
-        // 如果找到了后置摄像头，优先使用设备ID
-        if (backCamera) {
-          console.log('找到后置摄像头:', backCamera.label);
-          constraints.video.deviceId = { exact: backCamera.deviceId };
-        } else {
-          // 否则使用facingMode
-          console.log('未找到后置摄像头，使用facingMode');
-          constraints.video.facingMode = { exact: "environment" };
-        }
-        
-        return navigator.mediaDevices.getUserMedia(constraints);
-      }).then(function (videoStream) {
-        photoStream = videoStream
-        photoVideo.srcObject = videoStream;
-        
-        // 获取视频轨道并设置广角
-        const track = videoStream.getVideoTracks()[0];
-        const capabilities = track.getCapabilities();
-        const settings = track.getSettings();
-        
-        console.log('当前摄像头设置:', settings);
-        console.log('摄像头能力:', capabilities);
-        
-        // 检查是否使用了后置摄像头
-        if (settings.facingMode === 'user') {
-          console.warn('警告：当前使用的是前置摄像头！');
-          message('警告：当前使用的是前置摄像头');
-        } else {
-          console.log('正确：使用后置摄像头');
-        }
-        
-        // 设置为广角模式（最小缩放）
-        if (capabilities.zoom) {
-          track.applyConstraints({ 
-            advanced: [{ 
-              zoom: { ideal: capabilities.zoom.min || 1 } 
-            }] 
-          }).then(() => {
-            console.log('已设置为广角模式');
-          }).catch(e => {
-            console.error('设置广角模式失败:', e);
-          });
-        }
-        
-        photoVideo.setAttribute("playsinline", true);
-        photoVideo.setAttribute('webkit-playsinline', 'true');
-        photoVideo.play();
-        
-        hideLoading()
-        
-        // 等待视频准备好后立即拍照
-        photoVideo.addEventListener('loadeddata', () => {
-          // 短暂延迟确保视频完全准备好
-          setTimeout(() => {
-            autoCapture()
-          }, 300)
-        })
-        
-        // 开始渲染拍照预览
-        requestAnimationFrame(renderPhotoPreview)
-        
-      }).catch(err => {
-        console.error('第一次尝试失败:', err)
-        // 如果上面失败，尝试使用普通的facingMode设置
-        console.log('尝试普通后置摄像头模式');
-        return navigator.mediaDevices.getUserMedia({
-          audio: false,
-          video: {
-            facingMode: "environment", // 普通后置摄像头设置
-            width: { ideal: 3840, min: 1920 },
-            height: { ideal: 2160, min: 1080 },
-            zoom: { ideal: 1 },
-            focusMode: "continuous"
-          }
-        }).then(function (videoStream) {
-          console.log('使用普通后置摄像头模式成功')
-          // 相同的处理逻辑
-          photoStream = videoStream
-          photoVideo.srcObject = videoStream;
-          
-          const track = videoStream.getVideoTracks()[0];
-          const capabilities = track.getCapabilities();
-          const settings = track.getSettings();
-          
-          console.log('第二次尝试摄像头设置:', settings);
-          
-          if (settings.facingMode === 'user') {
-            console.error('仍然是前置摄像头！设备可能没有后置摄像头');
-            message('设备没有后置摄像头，使用前置摄像头拍照');
-          }
-          
-          if (capabilities.zoom) {
-            track.applyConstraints({ 
-              advanced: [{ 
-                zoom: { ideal: capabilities.zoom.min || 1 } 
-              }] 
-            }).then(() => {
-              console.log('已设置为广角模式');
-            }).catch(e => {
-              console.error('设置广角模式失败:', e);
-            });
-          }
-          
-          photoVideo.setAttribute("playsinline", true);
-          photoVideo.setAttribute('webkit-playsinline', 'true');
-          photoVideo.play();
-          
-          hideLoading()
-          
-          photoVideo.addEventListener('loadeddata', () => {
-            setTimeout(() => {
-              autoCapture()
-            }, 300)
-          })
-          
-          requestAnimationFrame(renderPhotoPreview)
-        }).catch(err2 => {
-          console.error('第二次尝试也失败:', err2);
-          message('启动摄像头失败，请检查权限设置');
-          hideLoading();
-        });
-      })
-    }
-    
-
-    
-    /** 渲染拍照预览 */
-    function renderPhotoPreview() {
-      if (photoVideo && photoVideo.readyState === photoVideo.HAVE_ENOUGH_DATA) {
-        canvasEle.height = photoVideo.videoHeight;
-        canvasEle.width = photoVideo.videoWidth;
-        canvasCtx.drawImage(photoVideo, 0, 0, canvasEle.width, canvasEle.height);
-      }
-      if (photoVideo) {
-        requestAnimationFrame(renderPhotoPreview);
-      }
-    }
-    
-    /** 自动拍照功能 */
-    function autoCapture() {
-      if (!photoVideo || photoVideo.readyState !== photoVideo.HAVE_ENOUGH_DATA) {
-        message('相机未准备好，正在重试...')
-        // 等待一下再重试
+    /** 使用当前扫码摄像头流直接拍照 */
+    function capturePhotoFromCurrentStream() {
+      if (!video || video.readyState !== video.HAVE_ENOUGH_DATA) {
+        message('摄像头未准备好，正在重试...')
         setTimeout(() => {
-          if (photoVideo) {
-            autoCapture()
+          if (video) {
+            capturePhotoFromCurrentStream()
           }
         }, 500)
         return
@@ -466,47 +300,29 @@
       const photoCanvas = document.createElement('canvas')
       const photoCtx = photoCanvas.getContext('2d')
       
-      // 设置照片尺寸
-      photoCanvas.width = photoVideo.videoWidth
-      photoCanvas.height = photoVideo.videoHeight
+      // 设置照片尺寸为视频的实际尺寸
+      photoCanvas.width = video.videoWidth
+      photoCanvas.height = video.videoHeight
       
       // 绘制当前帧到照片canvas
-      photoCtx.drawImage(photoVideo, 0, 0, photoCanvas.width, photoCanvas.height)
+      photoCtx.drawImage(video, 0, 0, photoCanvas.width, photoCanvas.height)
       
       // 转换为base64
       const base64Data = photoCanvas.toDataURL('image/jpeg', 0.9)
       
-      // 停止拍照流
-      stopPhotoStream()
+      // 停止扫描
+      stopScan()
       
       // 显示拍照结果
       displayPhotoResult(base64Data)
       
-      message('拍照成功！正在处理图片...')
-      
-      // 延迟一下显示完成信息
-      setTimeout(() => {
-        message('处理完成！')
-      }, 1000)
+      message('拍照成功！')
     }
     
-    /** 停止拍照流 */
-    function stopPhotoStream() {
-      if (photoStream) {
-        photoStream.getTracks().forEach(track => {
-          track.stop();
-        });
-        photoStream = null
-      }
-      if (photoVideo) {
-        photoVideo.pause()
-        photoVideo.removeAttribute('src')
-        photoVideo.load()
-        photoVideo = null
-      }
-      
-      document.querySelector('.reader-wrap').style.display = 'none'
-    }
+
+    
+
+
     
     /** 显示拍照结果 */
     function displayPhotoResult(base64Data) {
