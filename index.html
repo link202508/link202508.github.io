@@ -106,6 +106,21 @@
             0% { top: 0; }
             100% { top: 100%; }
         }
+        
+        @keyframes pulse {
+            0% { 
+                transform: translateX(-50%) scale(1);
+                opacity: 0.7;
+            }
+            50% { 
+                transform: translateX(-50%) scale(1.05);
+                opacity: 1;
+            }
+            100% { 
+                transform: translateX(-50%) scale(1);
+                opacity: 0.7;
+            }
+        }
 
         .controls {
             position: absolute;
@@ -170,7 +185,9 @@
 </head>
 <body>
     <div class="container">
-        <button class="scan-button" onclick="startScan()">📱 点击扫描1</button>
+        <h1 style="color: white; margin-bottom: 40px; font-size: 2.5em; text-shadow: 2px 2px 4px rgba(0,0,0,0.3);">二维码扫描器</h1>
+        
+        <button class="scan-button" onclick="startScan()">📱 点击扫描</button>
         
         <div class="result" id="result">
             <h3>扫描结果</h3>
@@ -226,6 +243,8 @@
         let lastQRData = null;
         let lastQRImage = null;
         let lastFullPhoto = null; // 新增：保存完整拍照
+        let scanStartTime = null; // 新增：记录扫描开始时间
+        let lastTipTime = 0; // 新增：记录上次提示时间
 
         // 获取可用摄像头
         async function getCameras() {
@@ -254,18 +273,19 @@
         // 开始扫描
         async function startScan() {
             try {
+                // 重置扫描计时器
+                scanStartTime = null;
+                lastTipTime = 0;
+                
                 await getCameras();
                 
                 // 优先选择后置摄像头（广角模式）
                 let constraints = {
                     video: {
                         facingMode: { ideal: 'environment' }, // 强制优先后置摄像头
-                        width: { ideal: 1920 }, // 恢复到1080p分辨率
+                        width: { ideal: 1920 }, // 提高分辨率改善识别效果
                         height: { ideal: 1080 },
-                        frameRate: { ideal: 30, min: 15 }, // 提高帧率
-                        focusMode: { ideal: 'continuous' }, // 连续自动对焦
-                        autoGainControl: { ideal: true }, // 自动增益控制
-                        noiseSuppression: { ideal: true } // 降噪
+                        frameRate: { ideal: 30, min: 15 } // 提高帧率
                     }
                 };
 
@@ -278,24 +298,18 @@
 
                 // 尝试启动摄像头
                 try {
-                    console.log('尝试启动摄像头...');
                     currentStream = await navigator.mediaDevices.getUserMedia(constraints);
-                    console.log('摄像头启动成功，实际分辨率:', {
-                        width: currentStream.getVideoTracks()[0].getSettings().width,
-                        height: currentStream.getVideoTracks()[0].getSettings().height
-                    });
                 } catch (error) {
-                    console.warn('高级配置启动失败，尝试基本配置:', error);
-                    // 如果高级配置失败，使用基本配置
+                    console.warn('无法使用指定设备ID，尝试使用facingMode:', error);
+                    // 如果指定设备ID失败，回退到只使用facingMode
                     constraints = {
                         video: {
                             facingMode: { ideal: 'environment' },
-                            width: { ideal: 1920 },
-                            height: { ideal: 1080 }
+                            width: { ideal: 1280 },
+                            height: { ideal: 720 }
                         }
                     };
                     currentStream = await navigator.mediaDevices.getUserMedia(constraints);
-                    console.log('基本配置摄像头启动成功');
                 }
 
                 video.srcObject = currentStream;
@@ -362,17 +376,17 @@
                 canvas.height = video.videoHeight;
                 context.drawImage(video, 0, 0, canvas.width, canvas.height);
                 
-                // Canvas图像预处理优化
-                const processedImageData = preprocessImage();
+                const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
                 
                 // 优化jsQR识别参数，提高识别速度
-                const code = jsQR(processedImageData.data, processedImageData.width, processedImageData.height, {
+                const code = jsQR(imageData.data, imageData.width, imageData.height, {
                     inversionAttempts: "dontInvert", // 不尝试颜色反转，提高速度
                 });
                 
                 if (code) {
                     console.log('扫描到二维码:', code.data);
                     console.log('二维码位置信息:', code.location);
+                    status.textContent = '扫描成功！';
                     
                     // 保存扫描结果
                     lastQRData = code.data;
@@ -398,6 +412,9 @@
                     showPhotoInScanner(code.data);
                     
                     return;
+                } else {
+                    // 未检测到二维码，显示智能提示
+                    showScanTips();
                 }
             }
             
@@ -407,117 +424,47 @@
             }, 50); // 50ms间隔，提高识别速度
         }
 
-        // 图像预处理优化函数
-        function preprocessImage() {
-            const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
-            const data = imageData.data;
-            
-            // 创建处理后的图像数据
-            const processedData = new Uint8ClampedArray(data.length);
-            
-            // 图像增强处理
-            for (let i = 0; i < data.length; i += 4) {
-                const r = data[i];
-                const g = data[i + 1];
-                const b = data[i + 2];
-                const a = data[i + 3];
-                
-                // 转换为灰度值（提高对比度）
-                const gray = Math.round(0.299 * r + 0.587 * g + 0.114 * b);
-                
-                // 自适应阈值处理（增强二维码边缘）
-                const threshold = getAdaptiveThreshold(imageData, i / 4, gray);
-                const binaryValue = gray > threshold ? 255 : 0;
-                
-                // 应用锐化滤波器
-                const sharpenedValue = applySharpenFilter(imageData, i / 4, binaryValue);
-                
-                processedData[i] = sharpenedValue;     // R
-                processedData[i + 1] = sharpenedValue; // G
-                processedData[i + 2] = sharpenedValue; // B
-                processedData[i + 3] = a;              // A
+        // 显示扫描提示
+        function showScanTips() {
+            if (!scanStartTime) {
+                scanStartTime = Date.now();
+                return;
             }
             
-            return {
-                data: processedData,
-                width: imageData.width,
-                height: imageData.height
-            };
-        }
-        
-        // 自适应阈值计算
-        function getAdaptiveThreshold(imageData, pixelIndex, grayValue) {
-            const width = imageData.width;
-            const height = imageData.height;
-            const x = pixelIndex % width;
-            const y = Math.floor(pixelIndex / width);
+            const currentTime = Date.now();
+            const scanDuration = currentTime - scanStartTime;
             
-            // 局部窗口大小
-            const windowSize = 15;
-            const halfWindow = Math.floor(windowSize / 2);
-            
-            let sum = 0;
-            let count = 0;
-            
-            // 计算局部区域的平均值
-            for (let dy = -halfWindow; dy <= halfWindow; dy++) {
-                for (let dx = -halfWindow; dx <= halfWindow; dx++) {
-                    const nx = x + dx;
-                    const ny = y + dy;
-                    
-                    if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
-                        const neighborIndex = (ny * width + nx) * 4;
-                        const nr = imageData.data[neighborIndex];
-                        const ng = imageData.data[neighborIndex + 1];
-                        const nb = imageData.data[neighborIndex + 2];
-                        const neighborGray = Math.round(0.299 * nr + 0.587 * ng + 0.114 * nb);
-                        
-                        sum += neighborGray;
-                        count++;
-                    }
-                }
+            // 每3秒更新一次提示，避免频繁闪烁
+            if (currentTime - lastTipTime < 3000) {
+                return;
             }
             
-            const localMean = count > 0 ? sum / count : grayValue;
-            // 返回自适应阈值，较为保守的设定
-            return localMean - 10;
-        }
-        
-        // 锐化滤波器
-        function applySharpenFilter(imageData, pixelIndex, currentValue) {
-            const width = imageData.width;
-            const height = imageData.height;
-            const x = pixelIndex % width;
-            const y = Math.floor(pixelIndex / width);
+            lastTipTime = currentTime;
+            let tipMessage = '';
             
-            // 3x3锐化核
-            const kernel = [
-                [ 0, -1,  0],
-                [-1,  5, -1],
-                [ 0, -1,  0]
-            ];
-            
-            let sum = 0;
-            
-            for (let ky = 0; ky < 3; ky++) {
-                for (let kx = 0; kx < 3; kx++) {
-                    const nx = x + kx - 1;
-                    const ny = y + ky - 1;
-                    
-                    if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
-                        const neighborIndex = (ny * width + nx) * 4;
-                        const nr = imageData.data[neighborIndex];
-                        const ng = imageData.data[neighborIndex + 1];
-                        const nb = imageData.data[neighborIndex + 2];
-                        const neighborGray = Math.round(0.299 * nr + 0.587 * ng + 0.114 * nb);
-                        
-                        sum += neighborGray * kernel[ky][kx];
-                    }
-                }
+            if (scanDuration < 3000) {
+                tipMessage = '将二维码对准扫描框';
+            } else if (scanDuration < 8000) {
+                tipMessage = '请保持手机稳定，距离20-30cm';
+            } else if (scanDuration < 15000) {
+                tipMessage = '请调整角度，避免反光和阴影';
+            } else if (scanDuration < 25000) {
+                tipMessage = '请靠近一些，确保二维码清晰可见';
+            } else if (scanDuration < 35000) {
+                tipMessage = '请检查二维码是否完整清晰';
+            } else {
+                tipMessage = '若仍无法识别，请尝试其他二维码';
             }
             
-            // 限制在有效范围内
-            return Math.max(0, Math.min(255, sum));
+            // 更新状态显示
+            if (status && tipMessage) {
+                status.textContent = tipMessage;
+                
+                // 添加动画效果，吸引用户注意
+                status.style.animation = 'none';
+                status.offsetHeight; // 触发重绘
+                status.style.animation = 'pulse 1s ease-in-out';
+            }
         }
 
         // 在扫描界面中显示拍照结果
@@ -540,12 +487,6 @@
             if (scanOverlay) {
                 scanOverlay.classList.add('hidden');
                 console.log('扫描覆盖层已隐藏');
-            }
-            
-            // 隐藏状态文本
-            if (status) {
-                status.style.display = 'none';
-                console.log('状态文本已隐藏');
             }
             
             // 创建拍照显示元素
@@ -575,14 +516,79 @@
                 console.error('没有可显示的拍照');
             }
             
-            // 清空控制按钮区域
+            // 更新状态和控制按钮
+            status.textContent = `扫描成功！二维码: ${qrData.substring(0, 30)}${qrData.length > 30 ? '...' : ''}`;
+            console.log('状态文本已更新');
+            
+            // 延迟一下更新按钮，确保界面已稳定
+            setTimeout(() => {
+                updateScannerControls();
+            }, 100);
+        }
+        
+        // 更新扫描界面的控制按钮
+        function updateScannerControls() {
+            console.log('更新扫描界面控制按钮');
             const controls = document.querySelector('.controls');
-            if (controls) {
-                controls.innerHTML = '';
-                console.log('控制按钮已清空');
+            if (!controls) {
+                console.error('找不到controls元素');
+                return;
             }
+            
+            controls.innerHTML = `
+                <button class="control-button" onclick="resetScan()" style="margin: 10px;">← 返回继续扫描</button>
+                <button class="control-button" onclick="viewDetailedResult()" style="margin: 10px;">📝 查看详情</button>
+            `;
+            
+            console.log('控制按钮已更新');
         }
 
+        // 重新扫描功能
+        function resetScan() {
+            console.log('返回继续扫描');
+            
+            // 重置扫描计时器
+            scanStartTime = null;
+            lastTipTime = 0;
+            
+            // 隐藏拍照显示
+            const photoDisplay = document.getElementById('photo-display');
+            if (photoDisplay) {
+                photoDisplay.style.display = 'none';
+            }
+            
+            // 显示视频元素
+            video.style.display = 'block';
+            
+            // 显示扫描覆盖层
+            const scanOverlay = document.querySelector('.scan-overlay');
+            if (scanOverlay) {
+                scanOverlay.classList.remove('hidden');
+            }
+            
+            // 重置状态
+            status.textContent = '将二维码对准扫描框';
+            
+            // 清空控制按钮区域
+            const controls = document.querySelector('.controls');
+            controls.innerHTML = '';
+            
+            // 重新启动扫描
+            startScan();
+        }
+        
+        // 查看详细结果
+        function viewDetailedResult() {
+            console.log('查看详细结果');
+            
+            // 关闭扫描界面
+            scannerContainer.style.display = 'none';
+            
+            // 显示详细结果
+            if (lastQRData) {
+                showResult(lastQRData);
+            }
+        }
 
         // 捕获完整拍照
         function captureFullPhoto() {
@@ -815,6 +821,8 @@
             lastQRData = null;
             lastQRImage = null;
             lastFullPhoto = null;
+            scanStartTime = null;
+            lastTipTime = 0;
             console.log('变量已重置');
             
             // 检查浏览器支持
