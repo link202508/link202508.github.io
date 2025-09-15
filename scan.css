@@ -3,55 +3,6 @@
   height: 100%;
 }
 
-.photo-result {
-  max-width: 90%;
-  margin: 20px auto;
-  padding: 20px;
-  border: 1px solid #ddd;
-  border-radius: 8px;
-  background-color: #f9f9f9;
-  text-align: center;
-}
-
-.photo-result h3 {
-  margin-top: 0;
-  color: #333;
-}
-
-.photo-result h4 {
-  margin: 15px 0 5px 0;
-  color: #666;
-}
-
-.base64-output {
-  margin-top: 20px;
-  text-align: left;
-}
-
-#base64-text {
-  font-family: monospace;
-  font-size: 12px;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-  padding: 8px;
-  resize: vertical;
-}
-
-#retry-btn {
-  margin-top: 15px;
-  padding: 10px 20px;
-  background-color: #007bff;
-  color: white;
-  border: none;
-  border-radius: 5px;
-  cursor: pointer;
-  font-size: 14px;
-}
-
-#retry-btn:hover {
-  background-color: #0056b3;
-}
-
 .reader-wrap {
   display: none;
   position: fixed;
