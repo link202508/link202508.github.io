@@ -13,7 +13,7 @@
 </head>
 
 <body>
-  <button id="start-btn">开始扫描3</button>
+  <button id="start-btn">开始扫描4</button>
 
   <div class="reader-wrap">
     <div style="position: relative;width: 160px;height: 160px;">
@@ -280,8 +280,7 @@
 
     /** 验证二维码文本, 满足条件的才会被扫描 */
     function validateQRCodeText(decodedText) {
-      return true
-      // return decodedText.startsWith('https://act.juhyb.com')
+      return decodedText.startsWith('https://act.juhyb.com')
     }
 
     function drawLine(begin, end, color) {
