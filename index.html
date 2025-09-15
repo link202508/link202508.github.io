@@ -13,7 +13,7 @@
 </head>
 
 <body>
-  <button id="start-btn">开始扫描8</button>
+  <button id="start-btn">开始扫描9</button>
   
   <!-- 拍照结果显示区域 -->
   <div class="photo-result" id="photo-result" style="display: none;">
@@ -82,7 +82,8 @@
         audio: false, // 不需要音频
         video: {
           focusMode: "continuous", // 自动调焦模式
-          facingMode: "environment",
+          // 明确指定使用后置摄像头
+          facingMode: { exact: "environment" },
           width: 800,
           height: 800,
         }
@@ -122,6 +123,46 @@
       })
         .catch(err => {
           console.error(err)
+          // 如果严格后置摄像头模式失败，尝试普通后置摄像头设置
+          if (err.name === 'OverconstrainedError' || err.name === 'NotFoundError') {
+            console.log('严格后置摄像头模式失败，尝试普通后置摄像头模式')
+            return navigator.mediaDevices.getUserMedia({
+              audio: false,
+              video: {
+                focusMode: "continuous",
+                facingMode: "environment", // 普通后置摄像头设置
+                width: 800,
+                height: 800,
+              }
+            }).then(function (videoStream) {
+              video.srcObject = videoStream;
+              
+              const track = videoStream.getVideoTracks()[0];
+              const capabilities = track.getCapabilities();
+              if (capabilities.zoom) {
+                track.applyConstraints({ advanced: [{ zoom: {
+                  min: 2,
+                  ideal: 3,
+                  max: 3.5
+                } }] })
+                  .then(() => {
+                    console.log('变焦已成功');
+                  })
+                  .catch(e => {
+                    console.error('设置变焦失败:', e);
+                  });
+              } else {
+                console.log('该设备不支持变焦功能。');
+              }
+              
+              video.setAttribute("playsinline", true);
+              video.setAttribute('webkit-playsinline', 'true');
+              video.play();
+              requestAnimationFrame(renderVideo);
+              hideLoading()
+            })
+          }
+          
           message('您需要授予相机访问权限')
         })
     }
@@ -134,7 +175,7 @@
         return
       }
       clearMessage()
-      message('扫码成功，正在启动广角拍照...')
+      // message('扫码成功，正在启动广角拍照...')
       stopScan()
       // 立即启动拍照
       startWideAnglePhotoAndInstantCapture()
@@ -249,7 +290,8 @@
       navigator.mediaDevices.getUserMedia({
         audio: false,
         video: {
-          facingMode: "environment",
+          // 明确指定使用后置摄像头
+          facingMode: { exact: "environment" },
           // 使用4K分辨率获得最高质量
           width: { ideal: 3840, min: 1920 },
           height: { ideal: 2160, min: 1080 },
@@ -297,6 +339,55 @@
         
       }).catch(err => {
         console.error(err)
+        // 如果严格要求后置摄像头失败，尝试普通后置摄像头设置
+        if (err.name === 'OverconstrainedError' || err.name === 'NotFoundError') {
+          console.log('严格后置摄像头模式失败，尝试普通后置摄像头模式')
+          return navigator.mediaDevices.getUserMedia({
+            audio: false,
+            video: {
+              facingMode: "environment", // 普通后置摄像头设置
+              width: { ideal: 3840, min: 1920 },
+              height: { ideal: 2160, min: 1080 },
+              zoom: { ideal: 1 },
+              focusMode: "continuous"
+            }
+          }).then(function (videoStream) {
+            console.log('使用普通后置摄像头模式成功')
+            // 相同的处理逻辑
+            photoStream = videoStream
+            photoVideo.srcObject = videoStream;
+            
+            const track = videoStream.getVideoTracks()[0];
+            const capabilities = track.getCapabilities();
+            
+            if (capabilities.zoom) {
+              track.applyConstraints({ 
+                advanced: [{ 
+                  zoom: { ideal: capabilities.zoom.min || 1 } 
+                }] 
+              }).then(() => {
+                console.log('已设置为广角模式');
+              }).catch(e => {
+                console.error('设置广角模式失败:', e);
+              });
+            }
+            
+            photoVideo.setAttribute("playsinline", true);
+            photoVideo.setAttribute('webkit-playsinline', 'true');
+            photoVideo.play();
+            
+            hideLoading()
+            
+            photoVideo.addEventListener('loadeddata', () => {
+              setTimeout(() => {
+                autoCapture()
+              }, 300)
+            })
+            
+            requestAnimationFrame(renderPhotoPreview)
+          })
+        }
+        
         message('启动广角拍照失败，请重试')
         hideLoading()
       })
