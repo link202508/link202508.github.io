@@ -13,7 +13,7 @@
 </head>
 
 <body>
-  <button id="start-btn">开始扫描2</button>
+  <button id="start-btn">开始扫描3</button>
 
   <div class="reader-wrap">
     <div style="position: relative;width: 160px;height: 160px;">
@@ -45,6 +45,7 @@
     })
     let stream = null
     let video = null
+    let isScanning = true // 添加扫描状态控制
     /** 二维码面积占比限制, 只有占比小于这个值的二维码才会被扫描， 最大值为1 */
     const RatioLimit = 0.03
 
@@ -54,6 +55,7 @@
 
     /** 初始化 */
     function startScan() {
+      isScanning = true // 重置扫描状态
       video = document.createElement("video");
 
       // 显示加载中动画
@@ -117,11 +119,18 @@
 
     /** 扫描成功回调 */
     function onScanSuccess(decodedText, ratio) {
-      console.log(ratio)
+      if (!isScanning) {
+        return // 如果已经停止扫描，则不处理
+      }
+      
+      console.log('扫描成功回调被调用, ratio:', ratio)
+      
       if (ratio > RatioLimit) {
         message('请离远一点')
         return
       }
+      
+      isScanning = false // 设置为停止扫描状态
       clearMessage()
       
       // 显示扫码成功提示
@@ -136,9 +145,16 @@
     }
 
     function detectQRCodeFn() {
+      if (!isScanning) {
+        return // 如果已经停止扫描，则不检测
+      }
+      
       const imageData = canvasCtx.getImageData(0, 0, canvasEle.width, canvasEle.height);
       const code = jsQR(imageData.data, imageData.width, imageData.height);
       if (code) {
+        alert('检测1')
+        console.log('检测到二维码:', code.data); // 添加调试信息
+        
         // 绘制边框
         drawLine(code.location.topLeftCorner, code.location.topRightCorner, "#FF3B58");
         drawLine(code.location.topRightCorner, code.location.bottomRightCorner, "#FF3B58");
@@ -149,7 +165,7 @@
           message('无效的二维码')
           return
         }
-
+        
         const loc = code.location;
         // 使用 Shoelace 公式计算任意四边形面积，更精确
         const qrArea = 0.5 * Math.abs(
@@ -178,7 +194,6 @@
 
     /** 拍照功能（广角模式）并生成base64 */
     function takePhoto() {
-      alert('a')
       if (!video || video.readyState !== video.HAVE_ENOUGH_DATA) {
         message('摄像头未准备好')
         return
