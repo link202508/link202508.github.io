@@ -100,55 +100,27 @@
       navigator.mediaDevices.getUserMedia({
         audio: false, // 不需要音频
         video: {
-          focusMode: "continuous", // 自动调焦模式
           facingMode: "environment", // 使用后置摄像头
-          width: { ideal: 1280, max: 1920 }, // 使用较高分辨率便于扫码
-          height: { ideal: 1280, max: 1920 },
-          aspectRatio: 1.0 // 正方形比例适合二维码扫描
+          width: { ideal: 800 },      // 使用普通分辨率避免兼容性问题
+          height: { ideal: 800 }
         }
       }).then(function (videoStream) {
         stream = videoStream // 保存流引用
         video.srcObject = videoStream;
 
-        // 获取视频轨道
+        // 获取视频轨道并设置广角模式
         const track = videoStream.getVideoTracks()[0];
-
         const capabilities = track.getCapabilities();
+        
         console.log('摄像头能力:', capabilities);
         
-        // 扫描阶段使用广角模式以获得更好的扫码体验
-        const scanConstraints = {
-          advanced: []
-        };
-        
-        // 设置缩放为最小值以获得最大视野（广角效果）
-        if (capabilities.zoom) {
-          const minZoom = capabilities.zoom.min || 1;
-          scanConstraints.advanced.push({ zoom: minZoom });
-          console.log('扫描阶段设置广角模式，缩放值:', minZoom);
-        }
-        
-        // 设置合适的分辨率用于扫描
-        if (capabilities.width && capabilities.height) {
-          const idealWidth = Math.min(capabilities.width.max || 1280, 1280);
-          const idealHeight = Math.min(capabilities.height.max || 1280, 1280);
-          
-          scanConstraints.advanced.push({
-            width: { ideal: idealWidth },
-            height: { ideal: idealHeight }
-          });
-          console.log('扫描阶段分辨率设置:', idealWidth + 'x' + idealHeight);
-        }
-        
-        // 应用扫描阶段的广角设置
-        if (scanConstraints.advanced.length > 0) {
-          track.applyConstraints(scanConstraints)
-            .then(() => {
-              console.log('扫描阶段广角设置成功');
-            })
-            .catch(e => {
-              console.warn('扫描阶段广角设置失败，使用默认设置:', e);
-            });
+        // 简化的广角设置
+        if (capabilities.zoom && capabilities.zoom.min) {
+          track.applyConstraints({ 
+            advanced: [{ zoom: capabilities.zoom.min }] 
+          })
+          .then(() => console.log('广角模式设置成功'))
+          .catch(e => console.warn('广角设置失败:', e));
         }
 
         // 让 safari 浏览器不进入全屏
@@ -228,341 +200,158 @@
       }
     }
 
-    /** 拍照功能 - 动态应用广角模式和最高分辨率 */
+    /** 拍照功能 - 简化版本确保可用 */
     function capturePhoto() {
-      try {
-        console.log('开始拍照功能，动态应用广角设置');
-        
-        if (!video || !stream) {
-          console.error('摄像头未就绪');
-          message('摄像头未就绪，请重新扫描');
-          return;
-        }
-
-        // 动态应用广角设置用于拍照
-        const track = stream.getVideoTracks()[0];
-        const capabilities = track.getCapabilities();
-        
-        // 构建拍照阶段的广角约束条件
-        const photoConstraints = {
-          advanced: []
-        };
-        
-        // 应用最小缩放值（最大广角）
-        if (capabilities.zoom) {
-          const minZoom = capabilities.zoom.min || 1;
-          photoConstraints.advanced.push({ zoom: minZoom });
-          console.log('拍照阶段广角设置，缩放值:', minZoom);
-        }
-        
-        // 应用最高分辨率（但不超过兼容性限制）
-        if (capabilities.width && capabilities.height) {
-          const maxWidth = Math.min(capabilities.width.max || 1920, 2048); // 限制最大分辨率
-          const maxHeight = Math.min(capabilities.height.max || 1920, 2048);
-          
-          photoConstraints.advanced.push({
-            width: { ideal: maxWidth },
-            height: { ideal: maxHeight }
-          });
-          console.log('拍照阶段高分辨率设置:', maxWidth + 'x' + maxHeight);
-        }
-        
-        // 动态应用拍照广角设置
-        if (photoConstraints.advanced.length > 0) {
-          track.applyConstraints(photoConstraints)
-            .then(() => {
-              console.log('拍照广角设置应用成功');
-              // 等待设置生效后执行拍照
-              setTimeout(() => {
-                performCaptureAdvanced();
-              }, 500);
-            })
-            .catch((error) => {
-              console.warn('拍照广角设置失败，使用当前设置:', error);
-              performCaptureSimple();
-            });
-        } else {
-          console.log('设备不支持动态设置，使用简化拍照');
-          performCaptureSimple();
-        }
-        
-      } catch (error) {
-        console.error('拍照失败:', error);
-        message('拍照失败，请重试');
-      }
-    }
-    
-    /** 高级拍照功能（应用了广角设置） */
-    function performCaptureAdvanced() {
-      try {
-        console.log('执行高级广角拍照');
-        
-        // 创建高分辨率拍照canvas
-        const photoCanvas = document.createElement('canvas');
-        const photoCtx = photoCanvas.getContext('2d');
-        
-        // 使用视频的实际分辨率
-        const videoWidth = video.videoWidth;
-        const videoHeight = video.videoHeight;
-        
-        photoCanvas.width = videoWidth;
-        photoCanvas.height = videoHeight;
-        
-        console.log('高级拍照尺寸:', videoWidth + 'x' + videoHeight);
-        
-        // 绘制当前广角视频帧
-        photoCtx.drawImage(video, 0, 0, videoWidth, videoHeight);
-        
-        // 生成高质量base64
-        const imageDataURL = photoCanvas.toDataURL('image/png', 0.95);
-        
-        console.log('高级拍照生成base64数据，长度:', imageDataURL.length);
-        
-        // 显示结果
-        showPhotoResult(imageDataURL);
-        
-        message(`广角拍照成功！分辨率: ${videoWidth}x${videoHeight}`);
-        
-      } catch (error) {
-        console.error('高级拍照失败:', error);
-        performCaptureSimple(); // 备用方案
-      }
-    }
-    
-    /** 简化版拍照 */
-    function performCaptureSimple() {
-      try {
-        console.log('执行简化拍照');
-        
-        if (!video) {
-          console.error('视频元素不存在');
-          message('摄像头未就绪');
-          return;
-        }
-        
-        console.log('视频状态:', video.readyState);
-        console.log('视频尺寸:', video.videoWidth + 'x' + video.videoHeight);
-        
-        // 创建拍照canvas
-        const photoCanvas = document.createElement('canvas');
-        const photoCtx = photoCanvas.getContext('2d');
-        
-        if (!photoCtx) {
-          console.error('无法获取canvas上下文');
-          return;
-        }
-        
-        // 使用当前视频尺寸，如果不可用则使用默认值
-        let videoWidth = video.videoWidth;
-        let videoHeight = video.videoHeight;
-        
-        // 如果视频尺寸为0，尝试使用canvas尺寸
-        if (!videoWidth || !videoHeight) {
-          videoWidth = canvasEle.width || 800;
-          videoHeight = canvasEle.height || 800;
-          console.log('使用canvas尺寸:', videoWidth + 'x' + videoHeight);
-        }
-        
-        photoCanvas.width = videoWidth;
-        photoCanvas.height = videoHeight;
-        
-        console.log('简化拍照尺寸:', videoWidth + 'x' + videoHeight);
-        
-        // 绘制当前视频帧
-        photoCtx.drawImage(video, 0, 0, videoWidth, videoHeight);
-        
-        // 检查canvas是否有内容
-        const imageData = photoCtx.getImageData(0, 0, videoWidth, videoHeight);
-        const hasContent = imageData.data.some(pixel => pixel !== 0);
-        console.log('Canvas是否有内容:', hasContent);
-        
-        if (!hasContent) {
-          console.warn('绘制的canvas为空，尝试备用方案');
-          // 尝试使用扫码canvas的数据
-          const fallbackImageData = canvasEle.toDataURL('image/png', 0.9);
-          if (fallbackImageData && fallbackImageData.length > 100) {
-            showPhotoResult(fallbackImageData);
-            message('拍照成功（使用扫码视图）');
-            return;
-          }
-        }
-        
-        // 生成base64
-        const imageDataURL = photoCanvas.toDataURL('image/png', 0.9);
-        
-        console.log('简化拍照生成base64数据');
-        console.log('base64长度:', imageDataURL.length);
-        console.log('base64前缀:', imageDataURL.substring(0, 50));
-        
-        if (!imageDataURL || imageDataURL.length < 100) {
-          console.error('生成的base64数据无效');
-          message('生成图片数据失败');
-          return;
-        }
-        
-        // 显示结果
-        showPhotoResult(imageDataURL);
-        
-        message(`拍照成功！分辨率: ${videoWidth}x${videoHeight}`);
-        
-      } catch (error) {
-        console.error('简化拍照失败:', error);
-        message('拍照失败: ' + error.message);
-        
-        // 最后的备用方案：使用扫码canvas
-        try {
-          console.log('使用最后的备用方案');
-          const emergencyImageData = canvasEle.toDataURL('image/png', 0.8);
-          if (emergencyImageData && emergencyImageData.length > 100) {
-            showPhotoResult(emergencyImageData);
-            message('拍照成功（紧急模式）');
-          } else {
-            message('所有拍照方案都失败');
-          }
-        } catch (emergencyError) {
-          console.error('紧急备用方案也失败:', emergencyError);
-          message('拍照功能不可用');
-        }
-      }
-    }
-    
-    /** 执行实际的拍照操作 */
-    function performCapture(photoCanvas, photoCtx) {
-      try {
-        console.log('开始执行拍照操作');
-        
-        // 使用视频的实际分辨率设置canvas尺寸
-        const videoWidth = video.videoWidth || canvasEle.width;
-        const videoHeight = video.videoHeight || canvasEle.height;
-        
-        console.log('拍照分辨率:', videoWidth + 'x' + videoHeight);
-        
-        photoCanvas.width = videoWidth;
-        photoCanvas.height = videoHeight;
-        
-        // 将当前视频帧绘制到高分辨率canvas
-        photoCtx.drawImage(video, 0, 0, videoWidth, videoHeight);
-        
-        // 生成高质量base64图片
-        const imageDataURL = photoCanvas.toDataURL('image/png', 0.95);
-        
-        console.log('生成base64数据，长度:', imageDataURL.length);
-        
-        // 显示拍照结果
-        showPhotoResult(imageDataURL);
-        
-        message(`拍照成功！分辨率: ${videoWidth}x${videoHeight}`);
-        
-        // 生成Blob用于上传
-        photoCanvas.toBlob((blob) => {
-          if (blob) {
-            console.log('生成的高分辨率图片Blob:', blob, '尺寸:', blob.size + ' bytes');
-            // TODO: 这里可以添加上传到服务器的逻辑
-          }
-        }, 'image/png', 0.95);
-        
-      } catch (error) {
-        console.error('执行拍照失败:', error);
-        message('拍照执行失败，请重试');
-        
-        // 备用方案：直接使用扫描canvas的数据
-        try {
-          console.log('尝试备用拍照方案');
-          const fallbackImageData = canvasEle.toDataURL('image/png', 0.9);
-          showPhotoResult(fallbackImageData);
-          message('拍照成功（备用模式）');
-        } catch (fallbackError) {
-          console.error('备用拍照方案也失败:', fallbackError);
-        }
-      }
-    }
-
-    /** 显示拍照结果 */
-    function showPhotoResult(base64Data) {
-      console.log('开始显示拍照结果');
-      console.log('base64数据类型:', typeof base64Data);
-      console.log('base64数据长度:', base64Data ? base64Data.length : 0);
-      console.log('base64数据前100个字符:', base64Data ? base64Data.substring(0, 100) : 'null');
+      console.log('=== 开始拍照功能 ===');
       
-      if (!base64Data || base64Data.length < 100) {
-        console.error('无效的base64数据');
-        message('生成图片数据失败');
+      try {
+        // 直接使用简化版本，避免复杂设置导致的问题
+        performCaptureSimple();
+        
+      } catch (error) {
+        console.error('拍照出错:', error);
+        message('拍照失败: ' + error.message);
+      }
+    }
+    
+    /** 最简化的拍照实现 */
+    function performCaptureSimple() {
+      console.log('=== 执行简化拍照 ===');
+      
+      // 检查基本条件
+      if (!video) {
+        console.error('视频元素不存在');
+        message('摄像头未初始化');
         return;
       }
       
-      const photoResult = document.getElementById('photo-result');
-      const capturedPhoto = document.getElementById('captured-photo');
-      const base64Output = document.getElementById('base64-output');
-      
-      console.log('查找显示元素:');
-      console.log('photoResult:', photoResult ? '找到' : '未找到');
-      console.log('capturedPhoto:', capturedPhoto ? '找到' : '未找到');
-      console.log('base64Output:', base64Output ? '找到' : '未找到');
-      
-      if (!photoResult || !capturedPhoto || !base64Output) {
-        console.error('找不到显示元素，尝试创建元素');
-        
-        // 如果元素不存在，尝试动态创建
-        if (!photoResult) {
-          const newPhotoResult = document.createElement('div');
-          newPhotoResult.id = 'photo-result';
-          newPhotoResult.innerHTML = `
-            <h3>拍照结果</h3>
-            <img id="captured-photo" style="max-width: 100%; max-height: 400px; border: 2px solid #ccc; border-radius: 10px;" />
-            <div style="margin-top: 10px;">
-              <button id="save-photo-btn" style="padding: 10px 20px; margin: 5px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer;">保存图片</button>
-              <button id="restart-scan-btn" style="padding: 10px 20px; margin: 5px; background: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer;">重新扫描</button>
-            </div>
-            <textarea id="base64-output" placeholder="Base64 图片数据将显示在这里..." style="width: 100%; height: 100px; margin-top: 10px; padding: 10px; border: 1px solid #ccc; border-radius: 5px; resize: vertical;"></textarea>
-          `;
-          newPhotoResult.style.cssText = 'display: none; margin-top: 20px; text-align: center;';
-          document.body.appendChild(newPhotoResult);
-          
-          // 重新获取元素引用
-          photoResult = newPhotoResult;
-          capturedPhoto = document.getElementById('captured-photo');
-          base64Output = document.getElementById('base64-output');
-          
-          console.log('动态创建元素完成');
-        }
-        
-        if (!photoResult || !capturedPhoto || !base64Output) {
-          console.error('仍然找不到显示元素，放弃显示');
-          return;
-        }
+      if (video.readyState < 2) {
+        console.error('视频未就绪，状态:', video.readyState);
+        message('视频未就绪，请稍后重试');
+        return;
       }
       
-      console.log('开始设置图片源');
+      try {
+        // 创建一个新的canvas元素
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        // 使用视频的实际尺寸或默认尺寸
+        const width = video.videoWidth || 640;
+        const height = video.videoHeight || 480;
+        
+        console.log('设置canvas尺寸:', width + 'x' + height);
+        
+        canvas.width = width;
+        canvas.height = height;
+        
+        // 绘制视频帧到canvas
+        ctx.drawImage(video, 0, 0, width, height);
+        
+        // 检查是否成功绘制
+        const imageData = ctx.getImageData(0, 0, Math.min(width, 100), Math.min(height, 100));
+        const hasPixels = Array.from(imageData.data).some(pixel => pixel > 0);
+        
+        if (!hasPixels) {
+          console.error('绘制的canvas为空');
+          message('拍照失败：无法获取视频内容');
+          return;
+        }
+        
+        console.log('Canvas绘制成功，开始生成base64');
+        
+        // 生成base64图片数据
+        const base64 = canvas.toDataURL('image/jpeg', 0.8); // 使用JPEG格式和较低质量提高兼容性
+        
+        console.log('Base64生成成功，长度:', base64.length);
+        console.log('Base64前缀:', base64.substring(0, 50));
+        
+        if (base64.length < 1000) {
+          console.error('Base64数据太短，可能生成失败');
+          message('生成图片数据异常');
+          return;
+        }
+        
+        // 直接显示结果，不调用复杂的showPhotoResult
+        displayPhoto(base64, width, height);
+        
+      } catch (error) {
+        console.error('拍照过程出错:', error);
+        message('拍照失败: ' + error.message);
+      }
+    }
+    
+    /** 直接显示照片 */
+    function displayPhoto(base64Data, width, height) {
+      console.log('=== 直接显示照片 ===');
       
-      // 显示图片
-      capturedPhoto.src = base64Data;
-      capturedPhoto.onload = function() {
-        console.log('图片加载成功！');
-        console.log('图片尺寸:', this.naturalWidth + 'x' + this.naturalHeight);
-        console.log('图片元素尺寸:', this.width + 'x' + this.height);
-      };
-      capturedPhoto.onerror = function(e) {
-        console.error('图片加载失败:', e);
-        console.error('图片src:', this.src.substring(0, 100));
-        message('图片显示失败');
-      };
+      // 获取或创建显示区域
+      let resultDiv = document.getElementById('photo-result');
       
-      // 显示base64数据
-      base64Output.value = base64Data;
-      console.log('设置base64输出完成');
+      if (!resultDiv) {
+        console.log('创建显示区域');
+        resultDiv = document.createElement('div');
+        resultDiv.id = 'photo-result';
+        resultDiv.style.cssText = 'margin: 20px auto; padding: 20px; text-align: center; border: 2px solid #ccc; border-radius: 10px; background: #f9f9f9;';
+        document.body.appendChild(resultDiv);
+      }
+      
+      // 直接设置 HTML 内容
+      resultDiv.innerHTML = `
+        <h2 style="color: #28a745;">拍照成功！</h2>
+        <p>分辨率: ${width}x${height}</p>
+        <img src="${base64Data}" style="max-width: 100%; max-height: 400px; border: 2px solid #007bff; border-radius: 8px; margin: 10px 0;" />
+        <div style="margin: 15px 0;">
+          <button onclick="downloadCurrentPhoto()" style="padding: 10px 20px; margin: 5px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer;">保存图片</button>
+          <button onclick="restartScanning()" style="padding: 10px 20px; margin: 5px; background: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer;">重新扫描</button>
+        </div>
+        <textarea readonly style="width: 95%; height: 80px; margin-top: 10px; padding: 5px; font-size: 10px; color: #666;">${base64Data}</textarea>
+      `;
       
       // 显示结果区域
-      photoResult.style.display = 'block';
-      console.log('显示结果区域');
+      resultDiv.style.display = 'block';
       
       // 滚动到结果区域
       setTimeout(() => {
-        console.log('滚动到结果区域');
-        photoResult.scrollIntoView({ behavior: 'smooth' });
-      }, 200);
+        resultDiv.scrollIntoView({ behavior: 'smooth' });
+      }, 100);
       
-      console.log('显示拍照结果完成');
+      // 保存当前图片数据供下载使用
+      window.currentPhotoData = base64Data;
+      
+      message(`拍照成功！分辨率: ${width}x${height}`);
+      
+      console.log('图片显示完成');
     }
+    
+    /** 下载当前照片 */
+    function downloadCurrentPhoto() {
+      if (window.currentPhotoData) {
+        const link = document.createElement('a');
+        link.href = window.currentPhotoData;
+        link.download = `广角拍照_${new Date().getTime()}.jpg`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        message('图片已保存');
+      } else {
+        message('没有可保存的图片');
+      }
+    }
+    
+    /** 重新开始扫描 */
+    function restartScanning() {
+      const resultDiv = document.getElementById('photo-result');
+      if (resultDiv) {
+        resultDiv.style.display = 'none';
+      }
+      window.currentPhotoData = null;
+      startScan();
+    }
+    
+
+
+
 
     /** 隐藏拍照结果 */
     function hidePhotoResult() {
