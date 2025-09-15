@@ -217,7 +217,7 @@
     <script>
         let video = document.getElementById('video');
         let canvas = document.getElementById('canvas');
-        let context = canvas.getContext('2d');
+        let context = canvas.getContext('2d', { willReadFrequently: true }); // 优化频繁读取操作
         let scannerContainer = document.getElementById('scannerContainer');
         let result = document.getElementById('result');
         let status = document.getElementById('status');
@@ -416,7 +416,7 @@
             const tempCanvas = document.createElement('canvas');
             tempCanvas.width = width;
             tempCanvas.height = height;
-            const tempCtx = tempCanvas.getContext('2d');
+            const tempCtx = tempCanvas.getContext('2d', { willReadFrequently: true }); // 优化频繁读取操作
             tempCtx.putImageData(imageData, 0, 0);
             
             // 获取图像数据进行处理
