@@ -13,7 +13,7 @@
 </head>
 
 <body>
-  <button id="start-btn">开始扫描7</button>
+  <button id="start-btn">开始扫描8</button>
   
   <!-- 拍照结果显示区域 -->
   <div class="photo-result" id="photo-result" style="display: none;">
@@ -136,10 +136,8 @@
       clearMessage()
       message('扫码成功，正在启动广角拍照...')
       stopScan()
-      // 延迟一下让用户看到提示，然后自动拍照
-      setTimeout(() => {
-        startWideAnglePhotoAndAutoCapture()
-      }, 1000)
+      // 立即启动拍照
+      startWideAnglePhotoAndInstantCapture()
     }
 
     function detectQRCodeFn() {
@@ -240,8 +238,8 @@
       document.querySelector('.reader-wrap').style.display = 'none'
     }
     
-    /** 启动广角拍照模式并自动拍照 */
-    function startWideAnglePhotoAndAutoCapture() {
+    /** 启动广角拍照模式并立即拍照 */
+    function startWideAnglePhotoAndInstantCapture() {
       photoVideo = document.createElement("video");
       
       // 显示拍照界面
@@ -252,8 +250,9 @@
         audio: false,
         video: {
           facingMode: "environment",
-          width: { ideal: 1920 },
-          height: { ideal: 1080 },
+          // 使用4K分辨率获得最高质量
+          width: { ideal: 3840, min: 1920 },
+          height: { ideal: 2160, min: 1080 },
           // 广角模式设置
           zoom: { ideal: 1 }, // 最小缩放，获得最广角度
           focusMode: "continuous"
@@ -285,8 +284,16 @@
         
         hideLoading()
         
-        // 显示倒计时并自动拍照
-        showCountdownAndAutoCapture()
+        // 等待视频准备好后立即拍照
+        photoVideo.addEventListener('loadeddata', () => {
+          // 短暂延迟确保视频完全准备好
+          setTimeout(() => {
+            autoCapture()
+          }, 300)
+        })
+        
+        // 开始渲染拍照预览
+        requestAnimationFrame(renderPhotoPreview)
         
       }).catch(err => {
         console.error(err)
@@ -295,61 +302,7 @@
       })
     }
     
-    /** 显示倒计时并自动拍照 */
-    function showCountdownAndAutoCapture() {
-      let countdown = 3;
-      
-      // 清除现有内容
-      const readerWrap = document.querySelector('.reader-wrap')
-      const existingCountdown = document.getElementById('countdown-display')
-      if (existingCountdown) {
-        existingCountdown.remove()
-      }
-      
-      // 创建倒计时显示
-      const countdownDisplay = document.createElement('div')
-      countdownDisplay.id = 'countdown-display'
-      countdownDisplay.style.cssText = `
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        font-size: 72px;
-        font-weight: bold;
-        color: #00ff33;
-        text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
-        z-index: 1002;
-        background: rgba(0,0,0,0.5);
-        border-radius: 50%;
-        width: 120px;
-        height: 120px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-      `
-      
-      readerWrap.appendChild(countdownDisplay)
-      
-      // 开始渲染拍照预览
-      requestAnimationFrame(renderPhotoPreview)
-      
-      // 倒计时逻辑
-      const countdownInterval = setInterval(() => {
-        countdownDisplay.textContent = countdown
-        countdown--
-        
-        if (countdown < 0) {
-          clearInterval(countdownInterval)
-          countdownDisplay.remove()
-          // 自动拍照
-          autoCapture()
-        }
-      }, 1000)
-      
-      // 立即显示第一个数字
-      countdownDisplay.textContent = countdown
-      message('准备拍照，请保持相机稳定')
-    }
+
     
     /** 渲染拍照预览 */
     function renderPhotoPreview() {
@@ -417,12 +370,6 @@
         photoVideo.removeAttribute('src')
         photoVideo.load()
         photoVideo = null
-      }
-      
-      // 移除倒计时显示
-      const countdownDisplay = document.getElementById('countdown-display')
-      if (countdownDisplay) {
-        countdownDisplay.remove()
       }
       
       document.querySelector('.reader-wrap').style.display = 'none'
