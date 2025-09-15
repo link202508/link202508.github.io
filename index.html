@@ -79,8 +79,8 @@
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            width: 300px; /* 增大扫描框尺寸 */
-            height: 300px;
+            width: 200px; /* 减小扫描框尺寸 */
+            height: 200px;
             border: 3px solid #00ff00;
             border-radius: 20px;
             box-shadow: 0 0 0 99999px rgba(0,0,0,0.5);
@@ -106,6 +106,21 @@
             0% { top: 0; }
             100% { top: 100%; }
         }
+        
+        @keyframes pulse {
+            0% { 
+                transform: translateX(-50%) scale(1);
+                opacity: 0.7;
+            }
+            50% { 
+                transform: translateX(-50%) scale(1.05);
+                opacity: 1;
+            }
+            100% { 
+                transform: translateX(-50%) scale(1);
+                opacity: 0.7;
+            }
+        }
 
         .controls {
             position: absolute;
@@ -114,6 +129,7 @@
             transform: translateX(-50%);
             display: flex;
             gap: 20px;
+            z-index: 10; /* 提高z-index确保按钮显示在照片上方 */
         }
 
         .control-button {
@@ -161,6 +177,7 @@
             background: rgba(0,0,0,0.7);
             padding: 10px 20px;
             border-radius: 25px;
+            z-index: 10; /* 提高z-index确保状态文本显示在照片上方 */
         }
     </style>
     <!-- 引入jsQR库用于二维码识别 -->
@@ -226,6 +243,8 @@
         let lastQRData = null;
         let lastQRImage = null;
         let lastFullPhoto = null; // 新增：保存完整拍照
+        let scanStartTime = null; // 新增：记录扫描开始时间
+        let lastTipTime = 0; // 新增：记录上次提示时间
 
         // 获取可用摄像头
         async function getCameras() {
@@ -254,6 +273,10 @@
         // 开始扫描
         async function startScan() {
             try {
+                // 重置扫描计时器
+                scanStartTime = null;
+                lastTipTime = 0;
+                
                 await getCameras();
                 
                 // 优先选择后置摄像头（广角模式）
@@ -389,6 +412,9 @@
                     showPhotoInScanner(code.data);
                     
                     return;
+                } else {
+                    // 未检测到二维码，显示智能提示
+                    showScanTips();
                 }
             }
             
@@ -396,6 +422,49 @@
             setTimeout(() => {
                 requestAnimationFrame(scanQR);
             }, 50); // 50ms间隔，提高识别速度
+        }
+
+        // 显示扫描提示
+        function showScanTips() {
+            if (!scanStartTime) {
+                scanStartTime = Date.now();
+                return;
+            }
+            
+            const currentTime = Date.now();
+            const scanDuration = currentTime - scanStartTime;
+            
+            // 每3秒更新一次提示，避免频繁闪烁
+            if (currentTime - lastTipTime < 3000) {
+                return;
+            }
+            
+            lastTipTime = currentTime;
+            let tipMessage = '';
+            
+            if (scanDuration < 3000) {
+                tipMessage = '将二维码对准扫描框';
+            } else if (scanDuration < 8000) {
+                tipMessage = '请保持手机稳定，距离20-30cm';
+            } else if (scanDuration < 15000) {
+                tipMessage = '请调整角度，避免反光和阴影';
+            } else if (scanDuration < 25000) {
+                tipMessage = '请靠近一些，确保二维码清晰可见';
+            } else if (scanDuration < 35000) {
+                tipMessage = '请检查二维码是否完整清晰';
+            } else {
+                tipMessage = '若仍无法识别，请尝试其他二维码';
+            }
+            
+            // 更新状态显示
+            if (status && tipMessage) {
+                status.textContent = tipMessage;
+                
+                // 添加动画效果，吸引用户注意
+                status.style.animation = 'none';
+                status.offsetHeight; // 触发重绘
+                status.style.animation = 'pulse 1s ease-in-out';
+            }
         }
 
         // 在扫描界面中显示拍照结果
@@ -406,15 +475,18 @@
             if (currentStream) {
                 currentStream.getTracks().forEach(track => track.stop());
                 currentStream = null;
+                console.log('视频流已停止');
             }
             
             // 隐藏视频元素
             video.style.display = 'none';
+            console.log('视频元素已隐藏');
             
             // 隐藏扫描覆盖层
             const scanOverlay = document.querySelector('.scan-overlay');
             if (scanOverlay) {
                 scanOverlay.classList.add('hidden');
+                console.log('扫描覆盖层已隐藏');
             }
             
             // 创建拍照显示元素
@@ -432,6 +504,7 @@
                     z-index: 1;
                 `;
                 document.querySelector('.scanner-box').appendChild(photoDisplay);
+                console.log('拍照显示元素已创建');
             }
             
             // 显示拍照
@@ -439,27 +512,44 @@
                 photoDisplay.src = lastFullPhoto;
                 photoDisplay.style.display = 'block';
                 console.log('拍照已在扫描界面显示');
+            } else {
+                console.error('没有可显示的拍照');
             }
             
             // 更新状态和控制按钮
             status.textContent = `扫描成功！二维码: ${qrData.substring(0, 30)}${qrData.length > 30 ? '...' : ''}`;
+            console.log('状态文本已更新');
             
-            // 更新控制按钮
-            updateScannerControls();
+            // 延迟一下更新按钮，确保界面已稳定
+            setTimeout(() => {
+                updateScannerControls();
+            }, 100);
         }
         
         // 更新扫描界面的控制按钮
         function updateScannerControls() {
+            console.log('更新扫描界面控制按钮');
             const controls = document.querySelector('.controls');
+            if (!controls) {
+                console.error('找不到controls元素');
+                return;
+            }
+            
             controls.innerHTML = `
-                <button class="control-button" onclick="resetScan()">← 返回继续扫描</button>
-                <button class="control-button" onclick="viewDetailedResult()">📝 查看详情</button>
+                <button class="control-button" onclick="resetScan()" style="margin: 10px;">← 返回继续扫描</button>
+                <button class="control-button" onclick="viewDetailedResult()" style="margin: 10px;">📝 查看详情</button>
             `;
+            
+            console.log('控制按钮已更新');
         }
 
         // 重新扫描功能
         function resetScan() {
             console.log('返回继续扫描');
+            
+            // 重置扫描计时器
+            scanStartTime = null;
+            lastTipTime = 0;
             
             // 隐藏拍照显示
             const photoDisplay = document.getElementById('photo-display');
@@ -731,6 +821,8 @@
             lastQRData = null;
             lastQRImage = null;
             lastFullPhoto = null;
+            scanStartTime = null;
+            lastTipTime = 0;
             console.log('变量已重置');
             
             // 检查浏览器支持
