@@ -1,414 +1,858 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
-<title>小扫描框 + 30%门槛 + 全景更广 + 拍照瞬间开遮罩</title>
-<style>
-  :root{ color-scheme: light dark; --preview-scale: 0.80; }
-  *{box-sizing:border-box}
-  html,body{margin:0;background:#000;color:#fff;font:16px/1.5 system-ui,-apple-system,Segoe UI,Roboto,PingFang SC,Noto Sans CJK SC,sans-serif}
-  .wrap{min-height:100dvh;position:relative;overflow:hidden}
-  video#v{ position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:#000;
-           transform: scale(var(--preview-scale)); transform-origin:center center; }
-  .mirror #v{ transform: scaleX(-1) scale(var(--preview-scale)); }
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>二维码扫描器</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
 
-  /* 扫描框（原来一半大小） */
-  .roi{position:absolute;inset:0;pointer-events:none}
-  .roi .box{
-    position:absolute;left:50%;top:50%;
-    width:calc(min(92vmin,92dvh)/2); height:calc(min(92vmin,92dvh)/2);
-    transform:translate(-50%,-50%); border-radius:18px; outline:2px solid rgba(255,255,255,.95); z-index:2;
-  }
-  /* 黑遮罩：默认遮盖框外；拍照瞬间 .unmask 取消遮罩 */
-  .mask{position:absolute;inset:0;pointer-events:none;z-index:1}
-  .mask::after{
-    content:"";position:absolute;inset:0; box-shadow:0 0 0 9999px rgba(0,0,0,1); border-radius:18px;
-    width:calc(min(92vmin,92dvh)/2); height:calc(min(92vmin,92dvh)/2);
-    left:50%; top:50%; transform:translate(-50%,-50%);
-  }
-  .unmask .mask::after{ box-shadow:0 0 0 9999px rgba(0,0,0,0); }
+        .container {
+            text-align: center;
+            padding: 20px;
+            width: 100%;
+            max-width: 500px;
+        }
 
-  .tips{ position:absolute;left:50%;top:calc(50% + min(24vmin,24dvh));transform:translate(-50%,-50%);
-         background:rgba(0,0,0,.6);padding:8px 12px;border-radius:12px;font-size:14px;z-index:3 }
-  .panel{position:absolute;left:8px;top:8px;right:8px;display:flex;gap:10px;flex-wrap:wrap;z-index:3}
-  .badge{padding:6px 10px;border-radius:10px;background:#111;border:1px solid #333;font-size:13px}
-  .ok{color:#a6ff9b}.warn{color:#ffd37a}.err{color:#ff9b9b}
-  .result{position:absolute;left:50%;top:8%;transform:translateX(-50%);max-width:92vw;background:#111;border:1px solid #333;
-          border-radius:12px;padding:10px 12px;font-size:14px;word-break:break-all;display:none;z-index:3}
-  .toolbar{position:absolute;left:0;right:0;bottom:env(safe-area-inset-bottom);display:flex;gap:8px;flex-wrap:wrap;justify-content:center;
-           align-items:center;padding:10px;background:linear-gradient(180deg,transparent,rgba(0,0,0,.5));z-index:3}
-  .toolbar button{font:inherit;padding:10px 14px;border-radius:12px;border:1px solid #666;background:#111;color:#fff}
-  .gallery{position:absolute;left:0;right:0;bottom:calc(env(safe-area-inset-bottom) + 64px);display:flex;gap:10px;justify-content:center;flex-wrap:wrap;padding:10px;z-index:3}
-  .card{background:#111;border:1px solid #333;border-radius:12px;overflow:hidden;max-width:44vw}
-  .card img{display:block;width:44vw;max-height:44vw;object-fit:contain;background:#000}
-  .card .cap{padding:8px 10px;font-size:12px;color:#bbb}
-  .card .row{display:flex;gap:8px;padding:0 10px 10px}
-  .card button{font:inherit;padding:8px 10px;border-radius:10px;border:1px solid #666;background:#1a1a1a;color:#fff}
-  .note{position:absolute;left:8px;right:8px;bottom:calc(env(safe-area-inset-bottom) + 8px);text-align:center;color:#bbb;font-size:12px;z-index:3}
-  .blocker{position:fixed;inset:0;background:#000;color:#fff;display:none;align-items:center;justify-content:center;text-align:center;padding:24px;z-index:9999}
-  .blocker.show{display:flex}
-</style>
+        .scan-button {
+            background: linear-gradient(45deg, #FF6B6B, #4ECDC4);
+            border: none;
+            padding: 20px 40px;
+            font-size: 18px;
+            color: white;
+            border-radius: 50px;
+            cursor: pointer;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            transition: all 0.3s ease;
+            font-weight: bold;
+            letter-spacing: 1px;
+        }
+
+        .scan-button:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 15px 35px rgba(0,0,0,0.3);
+        }
+
+        .scan-button:active {
+            transform: translateY(-1px);
+        }
+
+        .scanner-container {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.9);
+            z-index: 1000;
+        }
+
+        .scanner-box {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .scan-overlay {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 200px; /* 减小扫描框尺寸 */
+            height: 200px;
+            border: 3px solid #00ff00;
+            border-radius: 20px;
+            box-shadow: 0 0 0 99999px rgba(0,0,0,0.5);
+            z-index: 2;
+            pointer-events: none;
+        }
+        
+        .scan-overlay.hidden {
+            display: none;
+        }
+
+        .scan-line {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, #00ff00, transparent);
+            animation: scan 1.5s linear infinite; /* 加快扫描线动画 */
+        }
+
+        @keyframes scan {
+            0% { top: 0; }
+            100% { top: 100%; }
+        }
+
+        .controls {
+            position: absolute;
+            bottom: 50px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 20px;
+            z-index: 10; /* 提高z-index确保按钮显示在照片上方 */
+        }
+
+        .control-button {
+            background: rgba(255,255,255,0.2);
+            border: 2px solid white;
+            color: white;
+            padding: 15px 25px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: all 0.3s ease;
+        }
+
+        .control-button:hover {
+            background: rgba(255,255,255,0.3);
+        }
+
+        .result {
+            margin-top: 30px;
+            padding: 20px;
+            background: rgba(255,255,255,0.9);
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            display: none;
+        }
+
+        .result h3 {
+            color: #333;
+            margin-bottom: 15px;
+        }
+
+        .result-image {
+            max-width: 100%;
+            border-radius: 10px;
+            margin-top: 15px;
+        }
+
+        .status {
+            position: absolute;
+            top: 50px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: white;
+            font-size: 18px;
+            background: rgba(0,0,0,0.7);
+            padding: 10px 20px;
+            border-radius: 25px;
+            z-index: 10; /* 提高z-index确保状态文本显示在照片上方 */
+        }
+    </style>
+    <!-- 引入jsQR库用于二维码识别 -->
+    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
 </head>
 <body>
-<div id="blocker" class="blocker"></div>
+    <div class="container">
+        <button class="scan-button" onclick="startScan()">📱 点击扫描</button>
+        
+        <div class="result" id="result">
+            <h3>扫描结果</h3>
+            <p id="qr-text"></p>
+            
+            <div style="margin: 20px 0;">
+                <h4 style="color: #333; margin-bottom: 10px;">二维码区域:</h4>
+                <canvas id="qr-image" class="result-image"></canvas>
+            </div>
+            
+            <div style="margin: 20px 0;">
+                <h4 style="color: #333; margin-bottom: 10px;">完整拍照:</h4>
+                <img id="full-photo" class="result-image" style="display: none;" alt="完整拍照">
+            </div>
+            
+            <div style="display: flex; flex-wrap: wrap; gap: 10px; justify-content: center;">
+                <button class="control-button" onclick="downloadQRImage()">💾 下载二维码</button>
+                <button class="control-button" onclick="downloadFullPhoto()">📷 下载拍照</button>
+                <button class="control-button" onclick="copyQRBase64()">📋 复制二维码Base64</button>
+                <button class="control-button" onclick="copyPhotoBase64()">📋 复制拍照Base64</button>
+            </div>
+        </div>
+    </div>
 
-<div id="root" class="wrap">
-  <video id="v" autoplay playsinline muted></video>
-  <div class="mask" id="mask"></div>
-  <div class="roi"><div class="box" id="roiBox"></div></div>
+    <!-- 扫描界面 -->
+    <div class="scanner-container" id="scannerContainer">
+        <div class="scanner-box">
+            <video id="video" autoplay playsinline></video>
+            <div class="scan-overlay">
+                <div class="scan-line"></div>
+            </div>
+            <div class="status" id="status">将二维码对准扫描框</div>
+            <div class="controls">
+                <!-- 扫描过程中不显示任何控制按钮 -->
+            </div>
+        </div>
+    </div>
 
-  <div class="tips" id="tips">把实物放入小框内；检测到二维码会提示，满足门槛（&lt;30%）才拍照</div>
+    <!-- 隐藏的canvas用于处理图像 -->
+    <canvas id="canvas" style="display: none;"></canvas>
 
-  <div class="panel">
-    <div id="engine" class="badge">引擎：初始化中…</div>
-    <div id="meta" class="badge"></div>
-    <div id="gating" class="badge warn"></div>
-  </div>
+    <script>
+        let video = document.getElementById('video');
+        let canvas = document.getElementById('canvas');
+        let context = canvas.getContext('2d');
+        let scannerContainer = document.getElementById('scannerContainer');
+        let result = document.getElementById('result');
+        let status = document.getElementById('status');
+        let currentStream = null;
+        let isScanning = false;
+        let cameras = [];
+        let currentCameraIndex = 0;
+        let lastQRData = null;
+        let lastQRImage = null;
+        let lastFullPhoto = null; // 新增：保存完整拍照
 
-  <div id="result" class="result"></div>
+        // 获取可用摄像头
+        async function getCameras() {
+            try {
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                cameras = devices.filter(device => device.kind === 'videoinput');
+                console.log('发现摄像头:', cameras.length);
+                
+                // 查找后置摄像头并设置为默认
+                for (let i = 0; i < cameras.length; i++) {
+                    const camera = cameras[i];
+                    // 检查摄像头标签是否包含后置相关关键词
+                    if (camera.label.toLowerCase().includes('back') || 
+                        camera.label.toLowerCase().includes('rear') || 
+                        camera.label.toLowerCase().includes('environment')) {
+                        currentCameraIndex = i;
+                        console.log('找到后置摄像头:', camera.label);
+                        break;
+                    }
+                }
+            } catch (error) {
+                console.error('获取摄像头列表失败:', error);
+            }
+        }
 
-  <div class="toolbar">
-    <button id="toggleFacing">切换前/后置</button>
-    <button id="torch">手电筒</button>
-    <button id="resume" style="display:none">继续扫描</button>
-  </div>
+        // 开始扫描
+        async function startScan() {
+            try {
+                await getCameras();
+                
+                // 优先选择后置摄像头（广角模式）并请求更高分辨率和自动对焦
+                let constraints = {
+                    video: {
+                        facingMode: { ideal: 'environment' }, // 强制优先后置摄像头
+                        width: { ideal: 3840, min: 1920 }, // 请求4K分辨率，最低1080p
+                        height: { ideal: 2160, min: 1080 },
+                        frameRate: { ideal: 30, min: 15 }, // 提高帧率
+                        focusMode: { ideal: 'continuous' }, // 连续自动对焦
+                        autoGainControl: { ideal: true }, // 自动增益控制
+                        noiseSuppression: { ideal: true }, // 降噪
+                        exposureMode: { ideal: 'continuous' }, // 连续曝光调整
+                        whiteBalanceMode: { ideal: 'continuous' } // 连续白平衡
+                    }
+                };
 
-  <div id="gallery" class="gallery"></div>
-  <div class="note">说明：扫码成功会自动拍照；点击图片“保存到相册/下载”。</div>
-</div>
+                // 如果识别到具体的后置摄像头，直接指定设备ID
+                if (cameras.length > 0 && currentCameraIndex < cameras.length) {
+                    // 组合使用：既指定facingMode又指定具体设备
+                    constraints.video.deviceId = { exact: cameras[currentCameraIndex].deviceId };
+                    console.log('使用摄像头:', cameras[currentCameraIndex].label);
+                }
 
-<!-- <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script> -->
-<script>
-/*** 参数 ***/
-const INTERVAL = 160;              // 解码节流
-const SAMPLE   = 960;              // ROI 采样像素
-const THRESH   = 0.30;             // ✅ 触发门槛：二维码边长 / 扫描框边长 < 0.30
-const MIN_OK   = 0.06;             // 太小（<6%）可能不稳
-const STABLE_NEED = 2;             // 连续帧数
-// 扫描框大小（原来一半）：用于“真实框边长”的计算
-const ROI_SCALE = 0.46;
+                // 尝试启动摄像头，支持分辨率降级
+                try {
+                    console.log('尝试启动高分辨率摄像头...');
+                    currentStream = await navigator.mediaDevices.getUserMedia(constraints);
+                    console.log('高分辨率摄像头启动成功，实际分辨率:', {
+                        width: currentStream.getVideoTracks()[0].getSettings().width,
+                        height: currentStream.getVideoTracks()[0].getSettings().height
+                    });
+                } catch (error) {
+                    console.warn('高分辨率启动失败，尝试中等分辨率:', error);
+                    // 降级到2K分辨率
+                    constraints.video.width = { ideal: 2560, min: 1280 };
+                    constraints.video.height = { ideal: 1440, min: 720 };
+                    
+                    try {
+                        currentStream = await navigator.mediaDevices.getUserMedia(constraints);
+                        console.log('中等分辨率摄像头启动成功');
+                    } catch (error2) {
+                        console.warn('中等分辨率启动失败，尝试标准分辨率:', error2);
+                        // 再次降级到标准分辨率
+                        constraints.video.width = { ideal: 1920, min: 1280 };
+                        constraints.video.height = { ideal: 1080, min: 720 };
+                        delete constraints.video.focusMode; // 移除可能不支持的参数
+                        delete constraints.video.exposureMode;
+                        delete constraints.video.whiteBalanceMode;
+                        
+                        try {
+                            currentStream = await navigator.mediaDevices.getUserMedia(constraints);
+                            console.log('标准分辨率摄像头启动成功');
+                        } catch (error3) {
+                            console.warn('标准分辨率启动失败，使用基本配置:', error3);
+                            // 最后倒退方案
+                            constraints = {
+                                video: {
+                                    facingMode: { ideal: 'environment' }
+                                }
+                            };
+                            currentStream = await navigator.mediaDevices.getUserMedia(constraints);
+                            console.log('基本摄像头启动成功');
+                        }
+                    }
+                }
 
-let stream=null, loopTimer=null, paused=false, torchOn=false, facing='environment';
-let usingDetector=false, detector=null, imageCapture=null, curDeviceId=null;
-let stableCount=0;
+                video.srcObject = currentStream;
+                
+                scannerContainer.style.display = 'block';
+                isScanning = true;
+                
+                video.addEventListener('loadedmetadata', () => {
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                    scanQR();
+                });
+                
+                status.textContent = '将二维码对准扫描框';
+                
+            } catch (error) {
+                console.error('启动摄像头失败:', error);
+                alert('无法访问摄像头，请检查权限设置');
+            }
+        }
 
-const root   = document.getElementById('root');
-const blocker= document.getElementById('blocker');
-const v      = document.getElementById('v');
-const engine = document.getElementById('engine');
-const meta   = document.getElementById('meta');
-const gating = document.getElementById('gating');
-const resBox = document.getElementById('result');
-const tips   = document.getElementById('tips');
-const btnFacing = document.getElementById('toggleFacing');
-const btnTorch  = document.getElementById('torch');
-const btnResume = document.getElementById('resume');
-const gallery   = document.getElementById('gallery');
+        // 停止扫描
+        function stopScan() {
+            isScanning = false;
+            if (currentStream) {
+                currentStream.getTracks().forEach(track => track.stop());
+                currentStream = null;
+            }
+            
+            // 隐藏扫描界面
+            scannerContainer.style.display = 'none';
+            
+            // 重置视频显示
+            video.style.display = 'block';
+            
+            // 隐藏拍照显示
+            const photoDisplay = document.getElementById('photo-display');
+            if (photoDisplay) {
+                photoDisplay.style.display = 'none';
+            }
+            
+            // 显示扫描覆盖层
+            const scanOverlay = document.querySelector('.scan-overlay');
+            if (scanOverlay) {
+                scanOverlay.classList.remove('hidden');
+            }
+            
+            // 重置状态
+            status.textContent = '将二维码对准扫描框';
+            
+            // 清空控制按钮
+            const controls = document.querySelector('.controls');
+            controls.innerHTML = '';
+        }
 
-/* —— OS 检测：HarmonyOS 不支持 —— */
-(function detectOS(){
-  const ua = navigator.userAgent || navigator.vendor || '';
-  const isAndroid = /Android/i.test(ua);
-  const isIOS = /(iPhone|iPad|iPod)/i.test(ua);
-  const isHarmony = /HarmonyOS|OpenHarmony/i.test(ua);
-  if (isHarmony){
-    blocker.classList.add('show');
-    blocker.innerHTML = `<div><h2 style="margin:0 0 12px">不支持的系统</h2><div>检测到 <b>鸿蒙系统（HarmonyOS）</b>。此页面仅支持 <b>Android</b> 与 <b>iOS</b>。</div></div>`;
-    throw new Error('HarmonyOS not supported');
-  }
-  if (!(isAndroid || isIOS)){
-    blocker.classList.add('show');
-    blocker.innerHTML = `<div><h2 style="margin:0 0 12px">不支持的系统</h2><div>仅支持 <b>Android</b> 与 <b>iOS</b>。</div></div>`;
-    throw new Error('Only Android/iOS supported');
-  }
-})();
 
-/* —— 选择“更广”的摄像头：优先超广角 & 最小 zoom —— */
-async function pickUltraWideAfterPermission(){
-  const devs = await navigator.mediaDevices.enumerateDevices();
-  const cams = devs.filter(d => d.kind === 'videoinput');
-  // 关键词匹配超广角
-  const kw = /ultra|wide|0\.5|uw|超广/i;
-  const ultra = cams.find(c => kw.test(c.label));
-  if (ultra && ultra.deviceId !== curDeviceId){
-    await start(ultra.deviceId);
-  }else{
-    // 即便没换相机，也尽量把 zoom 调到最小，扩大视角
-    const track = stream?.getVideoTracks?.()[0];
-    const caps  = track?.getCapabilities?.();
-    if (caps && 'zoom' in caps){
-      try{ await track.applyConstraints({ advanced:[{ zoom: caps.min }] }); }catch{}
-    }
-  }
-}
 
-/* —— 摄像头 —— */
-async function start(deviceId){
-  await stop();
-  curDeviceId = deviceId || null;
-  // 取消“方形”倾向，改为较广的 16:9，希望取到更宽画面
-  const constraints = {
-    video:{
-      deviceId: deviceId ? { exact: deviceId } : undefined,
-      facingMode: deviceId ? undefined : { ideal:facing },
-      width:{ ideal:1920 }, height:{ ideal:1080 }, aspectRatio:{ ideal:16/9 },
-      advanced:[{ focusMode:'continuous' }]
-    }, audio:false
-  };
-  stream = await navigator.mediaDevices.getUserMedia(constraints);
-  console.log('stream',stream);
-  
-  v.srcObject = stream; await v.play();
+        // 扫描二维码
+        function scanQR() {
+            if (!isScanning) return;
+            
+            if (video.readyState === video.HAVE_ENOUGH_DATA) {
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                context.drawImage(video, 0, 0, canvas.width, canvas.height);
+                
+                // Canvas图像预处理优化
+                const processedImageData = preprocessImage();
+                
+                // 优化jsQR识别参数，提高识别速度
+                const code = jsQR(processedImageData.data, processedImageData.width, processedImageData.height, {
+                    inversionAttempts: "dontInvert", // 不尝试颜色反转，提高速度
+                });
+                
+                if (code) {
+                    console.log('扫描到二维码:', code.data);
+                    console.log('二维码位置信息:', code.location);
+                    
+                    // 保存扫描结果
+                    lastQRData = code.data;
+                    
+                    // 先保存图片，再停止扫描
+                    // 保存完整拍照（当前摄像头画面）
+                    captureFullPhoto();
+                    
+                    // 创建二维码图片的base64
+                    try {
+                        createQRImage(code);
+                        console.log('二维码区域图片创建成功');
+                    } catch (error) {
+                        console.error('二维码区域图片创建失败:', error);
+                        // 即使二维码区域图片创建失败，也显示文本结果
+                        lastQRImage = null;
+                    }
+                    
+                    // 停止扫描循环
+                    isScanning = false;
+                    
+                    // 立即在扫描界面显示拍照结果，不关闭扫描界面
+                    showPhotoInScanner(code.data);
+                    
+                    return;
+                }
+            }
+            
+            // 提高扫描频率，使用更快的刷新率
+            setTimeout(() => {
+                requestAnimationFrame(scanQR);
+            }, 50); // 50ms间隔，提高识别速度
+        }
 
-  // 引擎
-  usingDetector=false;
-  if ('BarcodeDetector' in window){
-    try{ detector = new BarcodeDetector({ formats:['qr_code'] }); await detector.detect(new ImageData(1,1));
-         usingDetector=true; engine.textContent='引擎：BarcodeDetector（原生）'; engine.className='badge ok';
-    }catch{ fallbackToJs(); }
-  }else{ fallbackToJs(); }
+        // 图像预处理优化函数
+        function preprocessImage() {
+            const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+            const data = imageData.data;
+            
+            // 创建处理后的图像数据
+            const processedData = new Uint8ClampedArray(data.length);
+            
+            // 图像增强处理
+            for (let i = 0; i < data.length; i += 4) {
+                const r = data[i];
+                const g = data[i + 1];
+                const b = data[i + 2];
+                const a = data[i + 3];
+                
+                // 转换为灰度值（提高对比度）
+                const gray = Math.round(0.299 * r + 0.587 * g + 0.114 * b);
+                
+                // 自适应阈值处理（增强二维码边缘）
+                const threshold = getAdaptiveThreshold(imageData, i / 4, gray);
+                const binaryValue = gray > threshold ? 255 : 0;
+                
+                // 应用锐化滤波器
+                const sharpenedValue = applySharpenFilter(imageData, i / 4, binaryValue);
+                
+                processedData[i] = sharpenedValue;     // R
+                processedData[i + 1] = sharpenedValue; // G
+                processedData[i + 2] = sharpenedValue; // B
+                processedData[i + 3] = a;              // A
+            }
+            
+            return {
+                data: processedData,
+                width: imageData.width,
+                height: imageData.height
+            };
+        }
+        
+        // 自适应阈值计算
+        function getAdaptiveThreshold(imageData, pixelIndex, grayValue) {
+            const width = imageData.width;
+            const height = imageData.height;
+            const x = pixelIndex % width;
+            const y = Math.floor(pixelIndex / width);
+            
+            // 局部窗口大小
+            const windowSize = 15;
+            const halfWindow = Math.floor(windowSize / 2);
+            
+            let sum = 0;
+            let count = 0;
+            
+            // 计算局部区域的平均值
+            for (let dy = -halfWindow; dy <= halfWindow; dy++) {
+                for (let dx = -halfWindow; dx <= halfWindow; dx++) {
+                    const nx = x + dx;
+                    const ny = y + dy;
+                    
+                    if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+                        const neighborIndex = (ny * width + nx) * 4;
+                        const nr = imageData.data[neighborIndex];
+                        const ng = imageData.data[neighborIndex + 1];
+                        const nb = imageData.data[neighborIndex + 2];
+                        const neighborGray = Math.round(0.299 * nr + 0.587 * ng + 0.114 * nb);
+                        
+                        sum += neighborGray;
+                        count++;
+                    }
+                }
+            }
+            
+            const localMean = count > 0 ? sum / count : grayValue;
+            // 返回自适应阈值，较为保守的设定
+            return localMean - 10;
+        }
+        
+        // 锐化滤波器
+        function applySharpenFilter(imageData, pixelIndex, currentValue) {
+            const width = imageData.width;
+            const height = imageData.height;
+            const x = pixelIndex % width;
+            const y = Math.floor(pixelIndex / width);
+            
+            // 3x3锐化核
+            const kernel = [
+                [ 0, -1,  0],
+                [-1,  5, -1],
+                [ 0, -1,  0]
+            ];
+            
+            let sum = 0;
+            
+            for (let ky = 0; ky < 3; ky++) {
+                for (let kx = 0; kx < 3; kx++) {
+                    const nx = x + kx - 1;
+                    const ny = y + ky - 1;
+                    
+                    if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+                        const neighborIndex = (ny * width + nx) * 4;
+                        const nr = imageData.data[neighborIndex];
+                        const ng = imageData.data[neighborIndex + 1];
+                        const nb = imageData.data[neighborIndex + 2];
+                        const neighborGray = Math.round(0.299 * nr + 0.587 * ng + 0.114 * nb);
+                        
+                        sum += neighborGray * kernel[ky][kx];
+                    }
+                }
+            }
+            
+            // 限制在有效范围内
+            return Math.max(0, Math.min(255, sum));
+        }
 
-  // 高分辨率拍照
-  try{
-    const track = stream.getVideoTracks()[0];
-    if ('ImageCapture' in window) imageCapture = new ImageCapture(track);
-    else imageCapture = null;
-  }catch{ imageCapture = null; }
+        // 在扫描界面中显示拍照结果
+        function showPhotoInScanner(qrData) {
+            console.log('在扫描界面显示拍照结果:', qrData);
+            
+            // 停止视频流
+            if (currentStream) {
+                currentStream.getTracks().forEach(track => track.stop());
+                currentStream = null;
+                console.log('视频流已停止');
+            }
+            
+            // 隐藏视频元素
+            video.style.display = 'none';
+            console.log('视频元素已隐藏');
+            
+            // 隐藏扫描覆盖层
+            const scanOverlay = document.querySelector('.scan-overlay');
+            if (scanOverlay) {
+                scanOverlay.classList.add('hidden');
+                console.log('扫描覆盖层已隐藏');
+            }
+            
+            // 隐藏状态文本
+            if (status) {
+                status.style.display = 'none';
+                console.log('状态文本已隐藏');
+            }
+            
+            // 创建拍照显示元素
+            let photoDisplay = document.getElementById('photo-display');
+            if (!photoDisplay) {
+                photoDisplay = document.createElement('img');
+                photoDisplay.id = 'photo-display';
+                photoDisplay.style.cssText = `
+                    width: 100%;
+                    height: 100%;
+                    object-fit: cover;
+                    position: absolute;
+                    top: 0;
+                    left: 0;
+                    z-index: 1;
+                `;
+                document.querySelector('.scanner-box').appendChild(photoDisplay);
+                console.log('拍照显示元素已创建');
+            }
+            
+            // 显示拍照
+            if (lastFullPhoto) {
+                photoDisplay.src = lastFullPhoto;
+                photoDisplay.style.display = 'block';
+                console.log('拍照已在扫描界面显示');
+            } else {
+                console.error('没有可显示的拍照');
+            }
+            
+            // 清空控制按钮区域
+            const controls = document.querySelector('.controls');
+            if (controls) {
+                controls.innerHTML = '';
+                console.log('控制按钮已清空');
+            }
+        }
 
-  await applyTorch(false);
-  paused=false; stableCount=0; updateMeta(); scheduleLoop();
 
-  // 拿到权限后再试图选“超广角”
-  pickUltraWideAfterPermission();
-}
-function fallbackToJs(){ engine.textContent='引擎：jsQR（兼容）'; engine.className='badge warn'; }
-async function stop(){
-  clearTimeout(loopTimer); loopTimer=null;
-  if (stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; }
-}
-function updateMeta(){
-  const t = stream?.getVideoTracks?.()[0];
-  const st = t?.getSettings?.()||{};
-  meta.textContent = `video=${v.videoWidth}×${v.videoHeight} • track=${st.width||'?'}×${st.height||'?'} • dpr=${devicePixelRatio}`;
-}
+        // 捕获完整拍照
+        function captureFullPhoto() {
+            try {
+                console.log('开始捕获完整拍照...');
+                
+                // 检查视频元素状态
+                if (!video || video.readyState !== video.HAVE_ENOUGH_DATA) {
+                    console.error('视频元素不可用或数据不足');
+                    lastFullPhoto = null;
+                    return;
+                }
+                
+                console.log('视频尺寸:', video.videoWidth, 'x', video.videoHeight);
+                
+                // 创建一个新的canvas来保存完整照片
+                const photoCanvas = document.createElement('canvas');
+                const photoContext = photoCanvas.getContext('2d');
+                
+                // 设置与视频相同的尺寸
+                photoCanvas.width = video.videoWidth;
+                photoCanvas.height = video.videoHeight;
+                
+                // 检查canvas尺寸
+                if (photoCanvas.width === 0 || photoCanvas.height === 0) {
+                    console.error('Canvas尺寸为0，无法创建图片');
+                    lastFullPhoto = null;
+                    return;
+                }
+                
+                // 绘制当前视频帧
+                photoContext.drawImage(video, 0, 0, photoCanvas.width, photoCanvas.height);
+                
+                // 转换为base64
+                lastFullPhoto = photoCanvas.toDataURL('image/jpeg', 0.9); // 使用JPEG格式，质量90%
+                
+                console.log('完整拍照已保存，尺寸:', photoCanvas.width, 'x', photoCanvas.height);
+                console.log('完整拍照Base64长度:', lastFullPhoto.length);
+                console.log('完整拍照Base64前50个字符:', lastFullPhoto.substring(0, 50));
+                
+            } catch (error) {
+                console.error('捕获完整拍照失败:', error);
+                lastFullPhoto = null;
+            }
+        }
 
-/* —— 计算“真实扫描框边长（像素）” —— */
-function getRoiInfo(){
-  const vw = v.videoWidth, vh = v.videoHeight;
-  const roiSide = Math.min(vw, vh) * ROI_SCALE;  // ✅ 扫描框真实像素边长
-  const sx = (vw - roiSide)/2, sy = (vh - roiSide)/2;
-  return { sx, sy, sw: roiSide, sh: roiSide, roiSide };
-}
+        // 创建二维码区域图片
+        function createQRImage(code) {
+            try {
+                const qrCanvas = document.getElementById('qr-image');
+                if (!qrCanvas) {
+                    console.error('找不到qr-image canvas元素');
+                    return;
+                }
+                
+                const qrContext = qrCanvas.getContext('2d');
+                
+                // 检查二维码位置信息
+                if (!code.location || code.location.length < 4) {
+                    console.error('二维码位置信息不完整');
+                    // 使用整个画布作为后备方案
+                    qrCanvas.width = canvas.width;
+                    qrCanvas.height = canvas.height;
+                    qrContext.drawImage(canvas, 0, 0);
+                    lastQRImage = qrCanvas.toDataURL('image/png');
+                    console.log('使用全图作为后备方案');
+                    return;
+                }
+                
+                // 获取二维码区域
+                const { location } = code;
+                const minX = Math.min(...location.map(p => p.x));
+                const minY = Math.min(...location.map(p => p.y));
+                const maxX = Math.max(...location.map(p => p.x));
+                const maxY = Math.max(...location.map(p => p.y));
+                
+                const width = maxX - minX;
+                const height = maxY - minY;
+                const padding = 20;
+                
+                console.log('二维码区域:', { minX, minY, maxX, maxY, width, height });
+                
+                qrCanvas.width = width + padding * 2;
+                qrCanvas.height = height + padding * 2;
+                
+                // 绘制白色背景
+                qrContext.fillStyle = 'white';
+                qrContext.fillRect(0, 0, qrCanvas.width, qrCanvas.height);
+                
+                // 绘制二维码区域
+                qrContext.drawImage(
+                    canvas,
+                    minX - padding, minY - padding, width + padding * 2, height + padding * 2,
+                    0, 0, qrCanvas.width, qrCanvas.height
+                );
+                
+                // 保存base64图片
+                lastQRImage = qrCanvas.toDataURL('image/png');
+                console.log('Base64图片生成成功，长度:', lastQRImage.length);
+                
+            } catch (error) {
+                console.error('创建二维码图片失败:', error);
+                lastQRImage = null;
+            }
+        }
 
-/* —— 解码循环 —— */
-const cv = document.createElement('canvas');
-const ctx = cv.getContext('2d', { willReadFrequently:true });
+        // 显示结果
+        function showResult(qrData) {
+            console.log('开始显示结果:', qrData);
+            
+            const qrTextElement = document.getElementById('qr-text');
+            const resultElement = document.getElementById('result');
+            const fullPhotoElement = document.getElementById('full-photo');
+            
+            if (!qrTextElement) {
+                console.error('找不到qr-text元素');
+                return;
+            }
+            
+            if (!resultElement) {
+                console.error('找不到result元素');
+                return;
+            }
+            
+            // 设置二维码文本内容
+            qrTextElement.textContent = qrData;
+            console.log('二维码文本内容已设置:', qrData);
+            
+            // 显示完整拍照
+            if (lastFullPhoto && fullPhotoElement) {
+                fullPhotoElement.src = lastFullPhoto;
+                fullPhotoElement.style.display = 'block';
+                console.log('完整拍照已显示');
+            } else {
+                console.warn('无法显示完整拍照:', { lastFullPhoto: !!lastFullPhoto, fullPhotoElement: !!fullPhotoElement });
+            }
+            
+            // 显示结果区域
+            resultElement.style.display = 'block';
+            console.log('结果区域已显示');
+            
+            // 滚动到结果区域
+            resultElement.scrollIntoView({ behavior: 'smooth' });
+            console.log('滚动到结果区域');
+            
+            // 显示成功提示
+            alert('扫描成功！二维码内容: ' + qrData.substring(0, 50) + (qrData.length > 50 ? '...' : '') + '\n完整拍照和二维码区域均已保存为Base64格式');
+        }
 
-async function loop(){
-  if (paused || !v.videoWidth){ return scheduleLoop(); }
+        // 下载二维码区域图片
+        function downloadQRImage() {
+            console.log('尝试下载二维码图片, lastQRImage:', !!lastQRImage);
+            if (!lastQRImage) {
+                alert('没有可下载的二维码图片，请先进行扫描');
+                return;
+            }
+            
+            const link = document.createElement('a');
+            link.download = `qr-code-${new Date().getTime()}.png`;
+            link.href = lastQRImage;
+            link.click();
+            console.log('二维码图片下载已触发');
+        }
 
-  const { sx, sy, sw, sh, roiSide } = getRoiInfo();
+        // 下载完整拍照
+        function downloadFullPhoto() {
+            console.log('尝试下载完整拍照, lastFullPhoto:', !!lastFullPhoto);
+            if (!lastFullPhoto) {
+                alert('没有可下载的完整拍照，请先进行扫描');
+                return;
+            }
+            
+            const link = document.createElement('a');
+            link.download = `full-photo-${new Date().getTime()}.jpg`;
+            link.href = lastFullPhoto;
+            link.click();
+            console.log('完整拍照下载已触发');
+        }
 
-  // 将 ROI 等比采样到 target×target（仅用于解码，加速）
-  const target = Math.max(320, Math.min(SAMPLE, Math.floor(sw)));
-  cv.width = target; cv.height = target;
-  ctx.clearRect(0,0,target,target);
-  ctx.drawImage(v, sx, sy, sw, sh, 0, 0, target, target);
+        // 复制二维码Base64
+        function copyQRBase64() {
+            console.log('尝试复制二维码Base64, lastQRImage:', !!lastQRImage);
+            if (!lastQRImage) {
+                alert('没有可复制的二维码Base64数据，请先进行扫描');
+                return;
+            }
+            
+            navigator.clipboard.writeText(lastQRImage).then(() => {
+                alert('二维码Base64数据已复制到剪贴板');
+            }).catch(err => {
+                console.error('复制失败:', err);
+                // 降级方案
+                fallbackCopyToClipboard(lastQRImage, '二维码Base64数据已复制到剪贴板');
+            });
+        }
 
-  let detected=false, text=null, qrSideOnTarget=0;
-  try{
-    if (usingDetector){
-      const bmp = await createImageBitmap(cv);
-      const out = await detector.detect(bmp);
-      if (out && out.length){
-        const q = out[0];
-        text = q.rawValue || null;
-        const box = boxFromDetector(q);
-        if (box){ qrSideOnTarget = box.size; detected = true; }
-      }
-    }else{
-      const img = ctx.getImageData(0,0,target,target);
-      const res = window.jsQR(img.data,img.width,img.height,{ inversionAttempts:'attemptBoth' });
-      if (res){
-        text = res.data || null;
-        const box = boxFromJsQR(res);
-        if (box){ qrSideOnTarget = box.size; detected = true; }
-      }
-    }
-  }catch{}
+        // 复制完整拍照Base64
+        function copyPhotoBase64() {
+            console.log('尝试复制完整拍照Base64, lastFullPhoto:', !!lastFullPhoto);
+            if (!lastFullPhoto) {
+                alert('没有可复制的完整拍照Base64数据，请先进行扫描');
+                return;
+            }
+            
+            navigator.clipboard.writeText(lastFullPhoto).then(() => {
+                alert('完整拍照Base64数据已复制到剪贴板');
+            }).catch(err => {
+                console.error('复制失败:', err);
+                // 降级方案
+                fallbackCopyToClipboard(lastFullPhoto, '完整拍照Base64数据已复制到剪贴板');
+            });
+        }
 
-  if (detected){
-    // ✅ 将“在 target 画布上的二维码边长”换算回“在真实扫描框上的边长”，再与“扫描框边长”比较
-    // scale = 真实扫描框像素边长 / target 采样边长
-    const scale = roiSide / target;
-    const qrSideOnRoi = qrSideOnTarget * scale;
-    const ratio = qrSideOnRoi / roiSide;           // == qrSideOnTarget / target（数学等价，但语义上更清晰：和扫描框比）
+        // 复制到剪贴板的降级方案
+        function fallbackCopyToClipboard(text, successMessage) {
+            const textarea = document.createElement('textarea');
+            textarea.value = text;
+            document.body.appendChild(textarea);
+            textarea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textarea);
+            alert(successMessage);
+        }
 
-    gating.className = (ratio < THRESH && ratio >= MIN_OK) ? 'badge ok' : 'badge warn';
-    gating.textContent = `已检测到二维码 · 占比 ${(ratio*100).toFixed(1)}%（阈值 < 30%）`;
-    tips.textContent = (ratio >= THRESH) ? '二维码过大，请拉远' :
-                       (ratio < MIN_OK) ? '二维码过小，稍微靠近' : '保持此距离…';
-
-    if (ratio < THRESH && ratio >= MIN_OK){
-      if (++stableCount >= STABLE_NEED) return onScanPassed(text);
-    }else{
-      stableCount = 0;
-    }
-  }else{
-    stableCount = 0;
-    gating.className='badge warn';
-    gating.textContent='未检测到二维码';
-    tips.textContent='请将二维码置于小框内';
-  }
-  scheduleLoop();
-}
-function scheduleLoop(){ loopTimer = setTimeout(()=>requestAnimationFrame(loop), INTERVAL); }
-
-/* —— 成功：拍照 + 提示（拍照瞬间打开遮罩） —— */
-async function onScanPassed(text){
-  paused = true;
-  navigator.vibrate?.(60);
-
-  root.classList.add('unmask');                 // 打开遮罩
-  const fullBlob = await takeFullPhotoBlob();   // 全景（尽量更广）
-  const roiBlob  = await snapshotRoiBlob();     // 中心 ROI
-  setTimeout(()=>root.classList.remove('unmask'), 250);  // 恢复遮罩
-
-  resBox.textContent = `扫码完成：${text}`;
-  resBox.style.display = 'block';
-
-  gallery.innerHTML='';
-  const ts = timeStamp();
-  if (fullBlob) addPreviewCard(fullBlob, `scan_full_${ts}.jpg`, '全景照片');
-  if (roiBlob)  addPreviewCard(roiBlob,  `scan_roi_${ts}.jpg`,  '中心ROI');
-
-  btnResume.style.display='inline-block';
-}
-
-/* —— 拍照（尽可能“全景更广”） —— */
-async function takeFullPhotoBlob(){
-  try{
-    if (imageCapture && imageCapture.takePhoto){
-      try{
-        const caps = await imageCapture.getPhotoCapabilities?.().catch(()=>null);
-        // 用最大分辨率拍（更大视角细节）；不要指定裁剪比例，交由相机决定
-        const opts = caps?.imageWidth?.max ? { imageWidth:caps.imageWidth.max, imageHeight:caps.imageHeight.max } : {};
-        return await imageCapture.takePhoto(opts);
-      }catch{ return await imageCapture.takePhoto(); }
-    }
-  }catch{}
-  // 兜底：整帧截图（使用视频原始分辨率，而不是 ROI）
-  try{
-    const vw=v.videoWidth, vh=v.videoHeight;
-    const c=document.createElement('canvas'), x=c.getContext('2d');
-    c.width=vw; c.height=vh;
-    x.drawImage(v,0,0,vw,vh);
-    return await new Promise(r=>c.toBlob(r,'image/jpeg',0.92));
-  }catch{ return null; }
-}
-async function snapshotRoiBlob(){
-  try{
-    const {sx,sy,sw,sh} = getRoiInfo();
-    const c=document.createElement('canvas'), x=c.getContext('2d');
-    c.width=sw; c.height=sh;
-    x.drawImage(v, sx,sy,sw,sh, 0,0,sw,sh);
-    return await new Promise(r=>c.toBlob(r,'image/jpeg',0.92));
-  }catch{ return null; }
-}
-
-/* —— 预览与保存 —— */
-function addPreviewCard(blob, filename, label){
-  const url = URL.createObjectURL(blob);
-  const card=document.createElement('div'); card.className='card';
-  card.innerHTML = `
-    <img src="${url}" alt="${label}"/>
-    <div class="cap">${label}</div>
-    <div class="row">
-      <button class="save">保存到相册/下载</button>
-      <button class="open">新窗口查看</button>
-    </div>`;
-  card.querySelector('.save').addEventListener('click', ()=>saveToDevice(blob, filename));
-  card.querySelector('.open').addEventListener('click', ()=>window.open(url,'_blank','noopener,noreferrer'));
-  gallery.appendChild(card);
-  window.addEventListener('pagehide', ()=>URL.revokeObjectURL(url), { once:true });
-}
-async function saveToDevice(blob, filename){
-  const file = new File([blob], filename, { type: blob.type || 'image/jpeg' });
-  if (navigator.canShare && navigator.canShare({ files:[file] })){
-    try{ await navigator.share({ files:[file], title:'扫码照片', text: filename }); return; }catch{}
-  }
-  if (window.showSaveFilePicker){
-    try{
-      const handle = await showSaveFilePicker({ suggestedName: filename,
-        types:[{ description:'Image', accept:{ 'image/jpeg':['.jpg','.jpeg'], 'image/png':['.png'] } }]});
-      const w = await handle.createWritable(); await w.write(blob); await w.close(); return;
-    }catch{}
-  }
-  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=filename;
-  document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 800);
-}
-
-/* —— 工具 —— */
-function dist(a,b){ const dx=a.x-b.x, dy=a.y-b.y; return Math.hypot(dx,dy); }
-function boxFromDetector(q){
-  if (q.cornerPoints && q.cornerPoints.length>=4){
-    const p=q.cornerPoints;
-    const d=Math.max(dist(p[0],p[1]),dist(p[1],p[2]),dist(p[2],p[3]),dist(p[3],p[0]));
-    return { size:d };
-  }
-  if (q.boundingBox){
-    const s=Math.max(q.boundingBox.width,q.boundingBox.height);
-    return { size:s };
-  }
-  return null;
-}
-function boxFromJsQR(res){
-  const p=res.location; if (!p) return null;
-  const d=Math.max(
-    dist(p.topLeftCorner,p.topRightCorner),
-    dist(p.topRightCorner,p.bottomRightCorner),
-    dist(p.bottomRightCorner,p.bottomLeftCorner),
-    dist(p.bottomLeftCorner,p.topLeftCorner)
-  );
-  return { size:d };
-}
-function timeStamp(){ const d=new Date(), p=n=>String(n).padStart(2,'0');
-  return d.getFullYear()+p(d.getMonth()+1)+p(d.getDate())+'_'+p(d.getHours())+p(d.getMinutes())+p(d.getSeconds());
-}
-
-/* —— 手电 & 交互 —— */
-async function applyTorch(on){
-  const track = stream?.getVideoTracks?.()[0];
-  const caps  = track?.getCapabilities?.();
-  if (caps && 'torch' in caps){
-    try{ await track.applyConstraints({ advanced:[{ torch:!!on }] });
-      torchOn=!!on; btnTorch.textContent = torchOn?'手电筒：开':'手电筒';
-    }catch{ btnTorch.textContent='手电筒(不支持)'; }
-  }else{ btnTorch.textContent='手电筒(不支持)'; }
-}
-document.getElementById('toggleFacing').addEventListener('click', async ()=>{
-  facing = (facing==='environment') ? 'user' : 'environment';
-  root.classList.toggle('mirror', facing==='user');
-  await start();
-});
-document.getElementById('torch').addEventListener('click', ()=>applyTorch(!torchOn));
-btnResume.addEventListener('click', ()=>{
-  btnResume.style.display='none'; resBox.style.display='none';
-  tips.textContent='把实物放入小框内；检测到二维码会提示，满足门槛(<30%)才拍照';
-  paused=false; stableCount=0; scheduleLoop();
-});
-window.addEventListener('resize', ()=>setTimeout(updateMeta, 300));
-document.addEventListener('visibilitychange', ()=>{ if (document.hidden) paused=true; else { paused=false; scheduleLoop(); } });
-
-/* —— 启动 —— */
-(async function init(){
-  if (!navigator.mediaDevices?.getUserMedia){
-    engine.textContent='此浏览器不支持摄像头'; engine.className='badge err'; return;
-  }
-  try{ await start(); }
-  catch(e){ engine.textContent='启动失败：'+e.message; engine.className='badge err'; console.error(e); }
-})();
-</script>
+        // 页面加载完成后初始化
+        window.addEventListener('load', () => {
+            console.log('页面加载完成');
+            
+            // 重置所有变量
+            lastQRData = null;
+            lastQRImage = null;
+            lastFullPhoto = null;
+            console.log('变量已重置');
+            
+            // 检查浏览器支持
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                alert('您的浏览器不支持摄像头访问功能');
+            }
+            
+            // 检查jsQR库是否加载
+            if (typeof jsQR === 'undefined') {
+                console.error('jsQR库未加载！');
+                alert('jsQR库加载失败，请检查网络连接');
+            } else {
+                console.log('jsQR库加载成功');
+            }
+        });
+    </script>
 </body>
 </html>
