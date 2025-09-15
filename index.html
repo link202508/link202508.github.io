@@ -84,6 +84,12 @@
             border: 3px solid #00ff00;
             border-radius: 20px;
             box-shadow: 0 0 0 99999px rgba(0,0,0,0.5);
+            z-index: 2;
+            pointer-events: none;
+        }
+        
+        .scan-overlay.hidden {
+            display: none;
         }
 
         .scan-line {
@@ -309,8 +315,34 @@
                 currentStream.getTracks().forEach(track => track.stop());
                 currentStream = null;
             }
+            
+            // 隐藏扫描界面
             scannerContainer.style.display = 'none';
+            
+            // 重置视频显示
+            video.style.display = 'block';
+            
+            // 隐藏拍照显示
+            const photoDisplay = document.getElementById('photo-display');
+            if (photoDisplay) {
+                photoDisplay.style.display = 'none';
+            }
+            
+            // 显示扫描覆盖层
+            const scanOverlay = document.querySelector('.scan-overlay');
+            if (scanOverlay) {
+                scanOverlay.classList.remove('hidden');
+            }
+            
+            // 重置状态
             status.textContent = '将二维码对准扫描框';
+            
+            // 重置控制按钮
+            const controls = document.querySelector('.controls');
+            controls.innerHTML = `
+                <button class="control-button" onclick="stopScan()">❌ 关闭</button>
+                <button class="control-button" onclick="switchCamera()">🔄 切换摄像头</button>
+            `;
         }
 
         // 切换摄像头
@@ -345,9 +377,7 @@
                     // 保存扫描结果
                     lastQRData = code.data;
                     
-                    // 停止扫描循环
-                    isScanning = false;
-                    
+                    // 先保存图片，再停止扫描
                     // 保存完整拍照（当前摄像头画面）
                     captureFullPhoto();
                     
@@ -361,12 +391,11 @@
                         lastQRImage = null;
                     }
                     
-                    // 延迟关闭扫描界面并显示结果
-                    setTimeout(() => {
-                        stopScan();
-                        showResult(code.data);
-                        console.log('结果已显示');
-                    }, 1000);
+                    // 停止扫描循环
+                    isScanning = false;
+                    
+                    // 立即在扫描界面显示拍照结果，不关闭扫描界面
+                    showPhotoInScanner(code.data);
                     
                     return;
                 }
@@ -375,9 +404,127 @@
             requestAnimationFrame(scanQR);
         }
 
+        // 在扫描界面中显示拍照结果
+        function showPhotoInScanner(qrData) {
+            console.log('在扫描界面显示拍照结果:', qrData);
+            
+            // 停止视频流
+            if (currentStream) {
+                currentStream.getTracks().forEach(track => track.stop());
+                currentStream = null;
+            }
+            
+            // 隐藏视频元素
+            video.style.display = 'none';
+            
+            // 隐藏扫描覆盖层
+            const scanOverlay = document.querySelector('.scan-overlay');
+            if (scanOverlay) {
+                scanOverlay.classList.add('hidden');
+            }
+            
+            // 创建拍照显示元素
+            let photoDisplay = document.getElementById('photo-display');
+            if (!photoDisplay) {
+                photoDisplay = document.createElement('img');
+                photoDisplay.id = 'photo-display';
+                photoDisplay.style.cssText = `
+                    width: 100%;
+                    height: 100%;
+                    object-fit: cover;
+                    position: absolute;
+                    top: 0;
+                    left: 0;
+                    z-index: 1;
+                `;
+                document.querySelector('.scanner-box').appendChild(photoDisplay);
+            }
+            
+            // 显示拍照
+            if (lastFullPhoto) {
+                photoDisplay.src = lastFullPhoto;
+                photoDisplay.style.display = 'block';
+                console.log('拍照已在扫描界面显示');
+            }
+            
+            // 更新状态和控制按钮
+            status.textContent = `扫描成功！二维码: ${qrData.substring(0, 30)}${qrData.length > 30 ? '...' : ''}`;
+            
+            // 更新控制按钮
+            updateScannerControls();
+        }
+        
+        // 更新扫描界面的控制按钮
+        function updateScannerControls() {
+            const controls = document.querySelector('.controls');
+            controls.innerHTML = `
+                <button class="control-button" onclick="resetScan()">🔄 重新扫描</button>
+                <button class="control-button" onclick="viewDetailedResult()">📝 查看详情</button>
+                <button class="control-button" onclick="downloadFullPhoto()">📷 下载拍照</button>
+                <button class="control-button" onclick="stopScan()">❌ 关闭</button>
+            `;
+        }
+
+        // 重新扫描功能
+        function resetScan() {
+            console.log('重新扫描');
+            
+            // 隐藏拍照显示
+            const photoDisplay = document.getElementById('photo-display');
+            if (photoDisplay) {
+                photoDisplay.style.display = 'none';
+            }
+            
+            // 显示视频元素
+            video.style.display = 'block';
+            
+            // 显示扫描覆盖层
+            const scanOverlay = document.querySelector('.scan-overlay');
+            if (scanOverlay) {
+                scanOverlay.classList.remove('hidden');
+            }
+            
+            // 重置状态
+            status.textContent = '将二维码对准扫描框';
+            
+            // 重置控制按钮
+            const controls = document.querySelector('.controls');
+            controls.innerHTML = `
+                <button class="control-button" onclick="stopScan()">❌ 关闭</button>
+                <button class="control-button" onclick="switchCamera()">🔄 切换摄像头</button>
+            `;
+            
+            // 重新启动扫描
+            startScan();
+        }
+        
+        // 查看详细结果
+        function viewDetailedResult() {
+            console.log('查看详细结果');
+            
+            // 关闭扫描界面
+            scannerContainer.style.display = 'none';
+            
+            // 显示详细结果
+            if (lastQRData) {
+                showResult(lastQRData);
+            }
+        }
+
         // 捕获完整拍照
         function captureFullPhoto() {
             try {
+                console.log('开始捕获完整拍照...');
+                
+                // 检查视频元素状态
+                if (!video || video.readyState !== video.HAVE_ENOUGH_DATA) {
+                    console.error('视频元素不可用或数据不足');
+                    lastFullPhoto = null;
+                    return;
+                }
+                
+                console.log('视频尺寸:', video.videoWidth, 'x', video.videoHeight);
+                
                 // 创建一个新的canvas来保存完整照片
                 const photoCanvas = document.createElement('canvas');
                 const photoContext = photoCanvas.getContext('2d');
@@ -385,6 +532,13 @@
                 // 设置与视频相同的尺寸
                 photoCanvas.width = video.videoWidth;
                 photoCanvas.height = video.videoHeight;
+                
+                // 检查canvas尺寸
+                if (photoCanvas.width === 0 || photoCanvas.height === 0) {
+                    console.error('Canvas尺寸为0，无法创建图片');
+                    lastFullPhoto = null;
+                    return;
+                }
                 
                 // 绘制当前视频帧
                 photoContext.drawImage(video, 0, 0, photoCanvas.width, photoCanvas.height);
@@ -394,6 +548,7 @@
                 
                 console.log('完整拍照已保存，尺寸:', photoCanvas.width, 'x', photoCanvas.height);
                 console.log('完整拍照Base64长度:', lastFullPhoto.length);
+                console.log('完整拍照Base64前50个字符:', lastFullPhoto.substring(0, 50));
                 
             } catch (error) {
                 console.error('捕获完整拍照失败:', error);
@@ -506,8 +661,9 @@
 
         // 下载二维码区域图片
         function downloadQRImage() {
+            console.log('尝试下载二维码图片, lastQRImage:', !!lastQRImage);
             if (!lastQRImage) {
-                alert('没有可下载的二维码图片');
+                alert('没有可下载的二维码图片，请先进行扫描');
                 return;
             }
             
@@ -515,12 +671,14 @@
             link.download = `qr-code-${new Date().getTime()}.png`;
             link.href = lastQRImage;
             link.click();
+            console.log('二维码图片下载已触发');
         }
 
         // 下载完整拍照
         function downloadFullPhoto() {
+            console.log('尝试下载完整拍照, lastFullPhoto:', !!lastFullPhoto);
             if (!lastFullPhoto) {
-                alert('没有可下载的完整拍照');
+                alert('没有可下载的完整拍照，请先进行扫描');
                 return;
             }
             
@@ -528,12 +686,14 @@
             link.download = `full-photo-${new Date().getTime()}.jpg`;
             link.href = lastFullPhoto;
             link.click();
+            console.log('完整拍照下载已触发');
         }
 
         // 复制二维码Base64
         function copyQRBase64() {
+            console.log('尝试复制二维码Base64, lastQRImage:', !!lastQRImage);
             if (!lastQRImage) {
-                alert('没有可复制的二维码Base64数据');
+                alert('没有可复制的二维码Base64数据，请先进行扫描');
                 return;
             }
             
@@ -548,8 +708,9 @@
 
         // 复制完整拍照Base64
         function copyPhotoBase64() {
+            console.log('尝试复制完整拍照Base64, lastFullPhoto:', !!lastFullPhoto);
             if (!lastFullPhoto) {
-                alert('没有可复制的完整拍照Base64数据');
+                alert('没有可复制的完整拍照Base64数据，请先进行扫描');
                 return;
             }
             
@@ -577,6 +738,12 @@
         window.addEventListener('load', () => {
             console.log('页面加载完成');
             
+            // 重置所有变量
+            lastQRData = null;
+            lastQRImage = null;
+            lastFullPhoto = null;
+            console.log('变量已重置');
+            
             // 检查浏览器支持
             if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
                 alert('您的浏览器不支持摄像头访问功能');
@@ -589,30 +756,6 @@
             } else {
                 console.log('jsQR库加载成功');
             }
-            
-            // 添加测试按钮（仅用于调试）
-            const testButton = document.createElement('button');
-            testButton.textContent = '📝 测试显示结果';
-            testButton.className = 'control-button';
-            testButton.style.marginTop = '20px';
-            testButton.onclick = () => {
-                console.log('测试显示结果');
-                // 模拟完整拍照（创建一个测试图片）
-                const testCanvas = document.createElement('canvas');
-                testCanvas.width = 640;
-                testCanvas.height = 480;
-                const testCtx = testCanvas.getContext('2d');
-                testCtx.fillStyle = '#4ECDC4';
-                testCtx.fillRect(0, 0, 640, 480);
-                testCtx.fillStyle = 'white';
-                testCtx.font = '30px Arial';
-                testCtx.textAlign = 'center';
-                testCtx.fillText('测试完整拍照', 320, 240);
-                lastFullPhoto = testCanvas.toDataURL('image/jpeg', 0.9);
-                
-                showResult('测试二维码内容: https://example.com/test');
-            };
-            document.querySelector('.container').appendChild(testButton);
         });
     </script>
 </body>
