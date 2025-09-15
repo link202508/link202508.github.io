@@ -170,7 +170,7 @@
 </head>
 <body>
     <div class="container">
-        <button class="scan-button" onclick="startScan()">📱 点击扫描</button>
+        <button class="scan-button" onclick="startScan()">📱 点击扫描1</button>
         
         <div class="result" id="result">
             <h3>扫描结果</h3>
@@ -256,18 +256,16 @@
             try {
                 await getCameras();
                 
-                // 优先选择后置摄像头（广角模式）并请求更高分辨率和自动对焦
+                // 优先选择后置摄像头（广角模式）
                 let constraints = {
                     video: {
                         facingMode: { ideal: 'environment' }, // 强制优先后置摄像头
-                        width: { ideal: 3840, min: 1920 }, // 请求4K分辨率，最低1080p
-                        height: { ideal: 2160, min: 1080 },
+                        width: { ideal: 1920 }, // 恢复到1080p分辨率
+                        height: { ideal: 1080 },
                         frameRate: { ideal: 30, min: 15 }, // 提高帧率
                         focusMode: { ideal: 'continuous' }, // 连续自动对焦
                         autoGainControl: { ideal: true }, // 自动增益控制
-                        noiseSuppression: { ideal: true }, // 降噪
-                        exposureMode: { ideal: 'continuous' }, // 连续曝光调整
-                        whiteBalanceMode: { ideal: 'continuous' } // 连续白平衡
+                        noiseSuppression: { ideal: true } // 降噪
                     }
                 };
 
@@ -278,47 +276,26 @@
                     console.log('使用摄像头:', cameras[currentCameraIndex].label);
                 }
 
-                // 尝试启动摄像头，支持分辨率降级
+                // 尝试启动摄像头
                 try {
-                    console.log('尝试启动高分辨率摄像头...');
+                    console.log('尝试启动摄像头...');
                     currentStream = await navigator.mediaDevices.getUserMedia(constraints);
-                    console.log('高分辨率摄像头启动成功，实际分辨率:', {
+                    console.log('摄像头启动成功，实际分辨率:', {
                         width: currentStream.getVideoTracks()[0].getSettings().width,
                         height: currentStream.getVideoTracks()[0].getSettings().height
                     });
                 } catch (error) {
-                    console.warn('高分辨率启动失败，尝试中等分辨率:', error);
-                    // 降级到2K分辨率
-                    constraints.video.width = { ideal: 2560, min: 1280 };
-                    constraints.video.height = { ideal: 1440, min: 720 };
-                    
-                    try {
-                        currentStream = await navigator.mediaDevices.getUserMedia(constraints);
-                        console.log('中等分辨率摄像头启动成功');
-                    } catch (error2) {
-                        console.warn('中等分辨率启动失败，尝试标准分辨率:', error2);
-                        // 再次降级到标准分辨率
-                        constraints.video.width = { ideal: 1920, min: 1280 };
-                        constraints.video.height = { ideal: 1080, min: 720 };
-                        delete constraints.video.focusMode; // 移除可能不支持的参数
-                        delete constraints.video.exposureMode;
-                        delete constraints.video.whiteBalanceMode;
-                        
-                        try {
-                            currentStream = await navigator.mediaDevices.getUserMedia(constraints);
-                            console.log('标准分辨率摄像头启动成功');
-                        } catch (error3) {
-                            console.warn('标准分辨率启动失败，使用基本配置:', error3);
-                            // 最后倒退方案
-                            constraints = {
-                                video: {
-                                    facingMode: { ideal: 'environment' }
-                                }
-                            };
-                            currentStream = await navigator.mediaDevices.getUserMedia(constraints);
-                            console.log('基本摄像头启动成功');
+                    console.warn('高级配置启动失败，尝试基本配置:', error);
+                    // 如果高级配置失败，使用基本配置
+                    constraints = {
+                        video: {
+                            facingMode: { ideal: 'environment' },
+                            width: { ideal: 1920 },
+                            height: { ideal: 1080 }
                         }
-                    }
+                    };
+                    currentStream = await navigator.mediaDevices.getUserMedia(constraints);
+                    console.log('基本配置摄像头启动成功');
                 }
 
                 video.srcObject = currentStream;
