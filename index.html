@@ -13,7 +13,7 @@
 </head>
 
 <body>
-  <button id="start-btn">开始扫描4</button>
+  <button id="start-btn">开始扫描5</button>
 
   <div class="reader-wrap">
     <div style="position: relative;width: 160px;height: 160px;">
@@ -39,6 +39,14 @@
   </div>
 
   <script>
+    // 检查jsQR库是否正确加载
+    if (typeof jsQR === 'undefined') {
+      console.error('jsQR库未正确加载！');
+      alert('jsQR库未正确加载，请检查文件路径！');
+    } else {
+      console.log('jsQR库加载成功');
+    }
+    
     const canvasEle = document.querySelector('#reader-canvas')
     const canvasCtx = canvasEle.getContext('2d', {
       willReadFrequently: true,
@@ -62,7 +70,7 @@
       showLoading()
 
       document.querySelector('.reader-wrap').style.display = 'flex'
-      const stream = navigator.mediaDevices.getUserMedia({
+      stream = navigator.mediaDevices.getUserMedia({
         audio: false, // 不需要音频
         video: {
           focusMode: "continuous", // 自动调焦模式
@@ -108,6 +116,7 @@
         video.setAttribute('webkit-playsinline', 'true');
 
         video.play();
+        console.log('视频开始播放，启动渲染循环');
         requestAnimationFrame(renderVideo);
         hideLoading()
       })
@@ -152,7 +161,6 @@
       const imageData = canvasCtx.getImageData(0, 0, canvasEle.width, canvasEle.height);
       const code = jsQR(imageData.data, imageData.width, imageData.height);
       if (code) {
-        alert('检测1')
         console.log('检测到二维码:', code.data); // 添加调试信息
         
         // 绘制边框
@@ -188,8 +196,13 @@
         canvasEle.width = video.videoWidth;
         canvasCtx.drawImage(video, 0, 0, canvasEle.width, canvasEle.height);
         detectQRCodeFn()
+      } else {
+        // 调试信息：视频未准备好
+        console.log('视频未准备好, readyState:', video ? video.readyState : 'video is null');
       }
-      requestAnimationFrame(renderVideo);
+      if (isScanning) { // 只有在扫描状态下才继续渲染
+        requestAnimationFrame(renderVideo);
+      }
     }
 
     /** 拍照功能（广角模式）并生成base64 */
