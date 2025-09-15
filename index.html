@@ -123,7 +123,7 @@
         return
       }
       clearMessage()
-      uploadScreenshot()
+      takePhoto() // 改为拍照功能
       stopScan()
     }
 
@@ -168,24 +168,90 @@
       requestAnimationFrame(renderVideo);
     }
 
-    /** 上传截图到后端 */
-    function uploadScreenshot() {
-      canvasEle.toBlob((blob) => {
-        // 检查是否成功生成 Blob
-        if (blob) {
-          // 创建 FormData 对象
-          const formData = new FormData();
+    /** 拍照功能（广角模式）并生成base64 */
+    function takePhoto() {
+      if (!video || video.readyState !== video.HAVE_ENOUGH_DATA) {
+        message('摄像头未准备好')
+        return
+      }
 
-          // 将 Blob 对象添加到 FormData 中，第一个参数是字段名（服务器用来接收），第二个是 Blob 对象
-          formData.append('screenshot', blob, 'canvas_screenshot.png');
+      // 创建一个临时canvas用于拍照
+      const photoCanvas = document.createElement('canvas')
+      const photoCtx = photoCanvas.getContext('2d')
+      
+      // 设置拍照尺寸（保持广角模式的高分辨率）
+      photoCanvas.width = video.videoWidth
+      photoCanvas.height = video.videoHeight
+      
+      // 从视频流中捕获当前帧
+      photoCtx.drawImage(video, 0, 0, photoCanvas.width, photoCanvas.height)
+      
+      // 生成base64格式的图片
+      const base64Image = photoCanvas.toDataURL('image/jpeg', 0.9) // 使用JPEG格式，质量0.9
+      
+      console.log('拍照成功，base64格式:')
+      console.log(base64Image)
+      
+      // TODO: 在这里处理base64图片数据
+      // 例如：上传到服务器、保存到本地存储等
+      
+      message(`拍照成功！图片尺寸: ${photoCanvas.width}x${photoCanvas.height}`)
+      
+      // 可选：显示拍照的图片给用户预览
+      showPhotoPreview(base64Image)
+      
+      return base64Image
+    }
 
-          // TODO 使用 fetch 或 ajax 发送 POST 请求, 把 formData 发给后端
-          // console.log(formData)
-          message('截图已成功上传！')
-        } else {
-          console.error('无法生成 Canvas Blob。');
+    /** 显示拍照预览（可选功能） */
+    function showPhotoPreview(base64Image) {
+      // 创建预览图片元素
+      const previewImg = document.createElement('img')
+      previewImg.src = base64Image
+      previewImg.style.cssText = `
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        max-width: 80vw;
+        max-height: 80vh;
+        border: 2px solid #FF3B58;
+        border-radius: 8px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+        z-index: 10000;
+        background: white;
+      `
+      
+      // 创建遮罩层
+      const overlay = document.createElement('div')
+      overlay.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0,0,0,0.8);
+        z-index: 9999;
+        cursor: pointer;
+      `
+      
+      // 点击遮罩层关闭预览
+      overlay.onclick = () => {
+        document.body.removeChild(overlay)
+        document.body.removeChild(previewImg)
+      }
+      
+      // 显示预览
+      document.body.appendChild(overlay)
+      document.body.appendChild(previewImg)
+      
+      // 3秒后自动关闭
+      setTimeout(() => {
+        if (document.body.contains(overlay)) {
+          document.body.removeChild(overlay)
+          document.body.removeChild(previewImg)
         }
-      }, 'image/png', 0.9); // 指定图片格式为 PNG，质量为 0.9
+      }, 3000)
     }
 
     /** 验证二维码文本, 满足条件的才会被扫描 */
