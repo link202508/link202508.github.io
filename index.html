@@ -13,7 +13,7 @@
 </head>
 
 <body>
-  <button id="start-btn">开始扫描4</button>
+  <button id="start-btn">开始广角扫码</button>
 
   <div class="reader-wrap">
     <div style="position: relative;width: 160px;height: 160px;">
@@ -91,8 +91,9 @@
         video: {
           focusMode: "continuous", // 自动调焦模式
           facingMode: "environment", // 使用后置摄像头
-          width: 800,
-          height: 800,
+          width: { ideal: 1280, max: 1920 }, // 使用较高分辨率便于扫码
+          height: { ideal: 1280, max: 1920 },
+          aspectRatio: 1.0 // 正方形比例适合二维码扫描
         }
       }).then(function (videoStream) {
         stream = videoStream // 保存流引用
@@ -104,19 +105,39 @@
         const capabilities = track.getCapabilities();
         console.log('摄像头能力:', capabilities);
         
-        // 为扫描阶段设置基本的广角模式
+        // 扫描阶段使用广角模式以获得更好的扫码体验
+        const scanConstraints = {
+          advanced: []
+        };
+        
+        // 设置缩放为最小值以获得最大视野（广角效果）
         if (capabilities.zoom) {
-          // 设置缩放为最小值以获得最大视野（广角效果）
           const minZoom = capabilities.zoom.min || 1;
-          track.applyConstraints({ advanced: [{ zoom: minZoom }] })
+          scanConstraints.advanced.push({ zoom: minZoom });
+          console.log('扫描阶段设置广角模式，缩放值:', minZoom);
+        }
+        
+        // 设置合适的分辨率用于扫描
+        if (capabilities.width && capabilities.height) {
+          const idealWidth = Math.min(capabilities.width.max || 1280, 1280);
+          const idealHeight = Math.min(capabilities.height.max || 1280, 1280);
+          
+          scanConstraints.advanced.push({
+            width: { ideal: idealWidth },
+            height: { ideal: idealHeight }
+          });
+          console.log('扫描阶段分辨率设置:', idealWidth + 'x' + idealHeight);
+        }
+        
+        // 应用扫描阶段的广角设置
+        if (scanConstraints.advanced.length > 0) {
+          track.applyConstraints(scanConstraints)
             .then(() => {
-              console.log('扫描阶段广角设置成功，缩放值:', minZoom);
+              console.log('扫描阶段广角设置成功');
             })
             .catch(e => {
-              console.error('设置扫描阶段缩放失败:', e);
+              console.warn('扫描阶段广角设置失败，使用默认设置:', e);
             });
-        } else {
-          console.log('该设备不支持缩放功能。');
         }
 
         // 让 safari 浏览器不进入全屏
@@ -143,17 +164,14 @@
       }
       clearMessage()
       
-      // 立即切换到广角模式拍照
-      message('扫描成功！正在切换到广角模式拍照...')
+      // 立即拍照 - 根据规范不设置倒计时
+      message('扫描成功！正在使用广角模式拍照...')
       
-      // 短暂延迟以显示成功消息
+      // 短暂延迟以确保用户看到成功消息
       setTimeout(() => {
         capturePhoto()
-        // 在拍照后停止扫描
-        setTimeout(() => {
-          stopScan()
-        }, 1000) // 给广角设置和拍照更多时间
-      }, 500)
+        stopScan()
+      }, 800) // 稍微增加延迟以让用户看到反馈
     }
 
     function detectQRCodeFn() {
@@ -199,10 +217,10 @@
       }
     }
 
-    /** 拍照功能 - 在拍照时切换到广角模式 */
+    /** 拍照功能 - 动态应用广角模式和最高分辨率 */
     function capturePhoto() {
       try {
-        console.log('开始拍照功能，将切换到广角模式');
+        console.log('开始拍照功能，动态应用广角设置');
         
         if (!video || !stream) {
           console.error('摄像头未就绪');
@@ -210,127 +228,130 @@
           return;
         }
 
-        // 获取视频轨道以应用广角设置
+        // 动态应用广角设置用于拍照
         const track = stream.getVideoTracks()[0];
         const capabilities = track.getCapabilities();
         
-        console.log('摄像头能力:', capabilities);
-        
-        // 设置广角模式约束
-        const wideAngleConstraints = {
+        // 构建拍照阶段的广角约束条件
+        const photoConstraints = {
           advanced: []
         };
         
-        // 1. 设置缩放为最小值（广角效果）
+        // 应用最小缩放值（最大广角）
         if (capabilities.zoom) {
           const minZoom = capabilities.zoom.min || 1;
-          wideAngleConstraints.advanced.push({ zoom: minZoom });
-          console.log('设置广角缩放值:', minZoom);
+          photoConstraints.advanced.push({ zoom: minZoom });
+          console.log('拍照阶段广角设置，缩放值:', minZoom);
         }
         
-        // 2. 设置最大分辨率（在兼容性范围内）
+        // 应用最高分辨率（但不超过兼容性限制）
         if (capabilities.width && capabilities.height) {
-          const maxWidth = capabilities.width.max || 1920;
-          const maxHeight = capabilities.height.max || 1920;
+          const maxWidth = Math.min(capabilities.width.max || 1920, 2048); // 限制最大分辨率
+          const maxHeight = Math.min(capabilities.height.max || 1920, 2048);
           
-          // 根据项目规范，使用高分辨率但限制在兼容范围内
-          const targetWidth = Math.min(maxWidth, 1920); // 不超过1920避免兼容性问题
-          const targetHeight = Math.min(maxHeight, 1920);
-          
-          wideAngleConstraints.advanced.push({
-            width: { ideal: targetWidth },
-            height: { ideal: targetHeight }
+          photoConstraints.advanced.push({
+            width: { ideal: maxWidth },
+            height: { ideal: maxHeight }
           });
-          console.log('设置高分辨率拍照:', targetWidth + 'x' + targetHeight);
+          console.log('拍照阶段高分辨率设置:', maxWidth + 'x' + maxHeight);
         }
         
-        // 3. 如果支持视角调节，设置为最大视角
-        if (capabilities.fieldOfView) {
-          const maxFOV = capabilities.fieldOfView.max;
-          if (maxFOV) {
-            wideAngleConstraints.advanced.push({ fieldOfView: maxFOV });
-            console.log('设置最大视角:', maxFOV);
-          }
+        // 动态应用拍照广角设置
+        if (photoConstraints.advanced.length > 0) {
+          track.applyConstraints(photoConstraints)
+            .then(() => {
+              console.log('拍照广角设置应用成功');
+              // 等待设置生效后执行拍照
+              setTimeout(() => {
+                performCaptureAdvanced();
+              }, 500);
+            })
+            .catch((error) => {
+              console.warn('拍照广角设置失败，使用当前设置:', error);
+              performCaptureSimple();
+            });
+        } else {
+          console.log('设备不支持动态设置，使用简化拍照');
+          performCaptureSimple();
         }
-        
-        message('正在切换到广角模式...');
-        
-        // 应用广角设置
-        track.applyConstraints(wideAngleConstraints)
-          .then(() => {
-            console.log('广角设置应用成功');
-            message('广角模式已切换，正在拍照...');
-            
-            // 等待设置生效后拍照
-            setTimeout(() => {
-              performWideAngleCapture();
-            }, 800); // 稍长的延迟让广角设置生效
-          })
-          .catch((error) => {
-            console.warn('无法应用广角设置:', error);
-            message('无法切换广角，使用当前设置拍照');
-            
-            // 如果无法应用广角设置，使用当前设置拍照
-            performWideAngleCapture();
-          });
         
       } catch (error) {
-        console.error('拍照准备失败:', error);
-        message('拍照准备失败，请重试');
+        console.error('拍照失败:', error);
+        message('拍照失败，请重试');
       }
     }
     
-    /** 执行广角拍照 */
-    function performWideAngleCapture() {
+    /** 高级拍照功能（应用了广角设置） */
+    function performCaptureAdvanced() {
       try {
-        console.log('执行广角拍照');
+        console.log('执行高级广角拍照');
         
         // 创建高分辨率拍照canvas
         const photoCanvas = document.createElement('canvas');
         const photoCtx = photoCanvas.getContext('2d');
         
-        // 获取当前视频的实际尺寸（广角模式下的尺寸）
-        const videoWidth = video.videoWidth || 800;
-        const videoHeight = video.videoHeight || 800;
+        // 使用视频的实际分辨率
+        const videoWidth = video.videoWidth;
+        const videoHeight = video.videoHeight;
         
         photoCanvas.width = videoWidth;
         photoCanvas.height = videoHeight;
         
-        console.log('广角拍照尺寸:', videoWidth + 'x' + videoHeight);
+        console.log('高级拍照尺寸:', videoWidth + 'x' + videoHeight);
         
         // 绘制当前广角视频帧
         photoCtx.drawImage(video, 0, 0, videoWidth, videoHeight);
         
-        // 生成高质量base64图片
+        // 生成高质量base64
         const imageDataURL = photoCanvas.toDataURL('image/png', 0.95);
         
-        console.log('广角拍照生成base64数据，长度:', imageDataURL.length);
+        console.log('高级拍照生成base64数据，长度:', imageDataURL.length);
         
         // 显示结果
         showPhotoResult(imageDataURL);
         
         message(`广角拍照成功！分辨率: ${videoWidth}x${videoHeight}`);
         
-        // 生成Blob用于上传
-        photoCanvas.toBlob((blob) => {
-          if (blob) {
-            console.log('广角拍照Blob:', blob, '尺寸:', blob.size + ' bytes');
-          }
-        }, 'image/png', 0.95);
+      } catch (error) {
+        console.error('高级拍照失败:', error);
+        performCaptureSimple(); // 备用方案
+      }
+    }
+    
+    /** 简化版拍照 */
+    function performCaptureSimple() {
+      try {
+        console.log('执行简化拍照');
+        
+        // 创建拍照canvas
+        const photoCanvas = document.createElement('canvas');
+        const photoCtx = photoCanvas.getContext('2d');
+        
+        // 使用当前视频尺寸
+        const videoWidth = video.videoWidth || 800;
+        const videoHeight = video.videoHeight || 800;
+        
+        photoCanvas.width = videoWidth;
+        photoCanvas.height = videoHeight;
+        
+        console.log('简化拍照尺寸:', videoWidth + 'x' + videoHeight);
+        
+        // 绘制当前视频帧
+        photoCtx.drawImage(video, 0, 0, videoWidth, videoHeight);
+        
+        // 生成base64
+        const imageDataURL = photoCanvas.toDataURL('image/png', 0.9);
+        
+        console.log('简化拍照生成base64数据，长度:', imageDataURL.length);
+        
+        // 显示结果
+        showPhotoResult(imageDataURL);
+        
+        message(`拍照成功！分辨率: ${videoWidth}x${videoHeight}`);
         
       } catch (error) {
-        console.error('广角拍照失败:', error);
-        message('广角拍照失败');
-        
-        // 备用方案
-        try {
-          console.log('尝试备用拍照方案');
-          const fallbackImageData = canvasEle.toDataURL('image/png', 0.9);
-          showPhotoResult(fallbackImageData);
-          message('拍照成功（备用模式）');
-        } catch (fallbackError) {
-          console.error('备用拍照也失败:', fallbackError);
-        }
+        console.error('简化拍照失败:', error);
+        message('拍照失败');
       }
     }
     
