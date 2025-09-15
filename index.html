@@ -13,7 +13,7 @@
 </head>
 
 <body>
-  <button id="start-btn">开始扫描2</button>
+  <button id="start-btn">开始扫描3</button>
 
   <div class="reader-wrap">
     <div style="position: relative;width: 160px;height: 160px;">
@@ -199,58 +199,22 @@
     /** 拍照功能 - 使用广角模式和最高分辨率 */
     function capturePhoto() {
       try {
+        console.log('开始拍照功能');
+        
         if (!video || !stream) {
+          console.error('摄像头未就绪');
           message('摄像头未就绪，请重新扫描');
           return;
         }
 
-        // 创建用于高分辨率拍照的canvas
-        const photoCanvas = document.createElement('canvas');
-        const photoCtx = photoCanvas.getContext('2d');
+        // 简化版本：直接使用当前视频帧拍照
+        console.log('使用简化拍照模式');
+        performCaptureSimple();
         
-        // 获取视频轨道以应用广角设置
-        const track = stream.getVideoTracks()[0];
-        const capabilities = track.getCapabilities();
-        
-        // 设置广角模式和最高分辨率
-        const constraints = {
-          advanced: []
-        };
-        
-        // 设置缩放为最小值以获得最大视野（广角效果）
-        if (capabilities.zoom) {
-          const minZoom = capabilities.zoom.min || 1;
-          constraints.advanced.push({ zoom: minZoom });
-          console.log('设置广角模式，缩放值:', minZoom);
-        }
-        
-        // 设置最高分辨率
-        if (capabilities.width && capabilities.height) {
-          const maxWidth = capabilities.width.max || 1920;
-          const maxHeight = capabilities.height.max || 1920;
-          // 限制最大分辨率避免兼容性问题，但尽可能使用高分辨率
-          const targetWidth = Math.min(maxWidth, 2048);
-          const targetHeight = Math.min(maxHeight, 2048);
-          
-          constraints.advanced.push({
-            width: { ideal: targetWidth },
-            height: { ideal: targetHeight }
-          });
-          console.log('设置高分辨率拍照:', targetWidth + 'x' + targetHeight);
-        }
-        
-        // 应用广角和高分辨率设置
-        track.applyConstraints(constraints)
-          .then(() => {
-            // 等待设置生效后进行拍照
-            setTimeout(() => {
-              performCapture(photoCanvas, photoCtx);
-            }, 300);
-          })
-          .catch((error) => {
-            console.warn('无法应用广角设置，使用当前设置拍照:', error);
-            performCapture(photoCanvas, photoCtx);
-          });
+        // 如果简化版本成功，尝试应用广角设置
+        // setTimeout(() => {
+        //   applyCameraSettings();
+        // }, 1000);
         
       } catch (error) {
         console.error('拍照失败:', error);
@@ -258,12 +222,53 @@
       }
     }
     
+    /** 简化版拍照 */
+    function performCaptureSimple() {
+      try {
+        console.log('执行简化拍照');
+        
+        // 创建拍照canvas
+        const photoCanvas = document.createElement('canvas');
+        const photoCtx = photoCanvas.getContext('2d');
+        
+        // 使用当前视频尺寸
+        const videoWidth = video.videoWidth || 800;
+        const videoHeight = video.videoHeight || 800;
+        
+        photoCanvas.width = videoWidth;
+        photoCanvas.height = videoHeight;
+        
+        console.log('简化拍照尺寸:', videoWidth + 'x' + videoHeight);
+        
+        // 绘制当前视频帧
+        photoCtx.drawImage(video, 0, 0, videoWidth, videoHeight);
+        
+        // 生成base64
+        const imageDataURL = photoCanvas.toDataURL('image/png', 0.9);
+        
+        console.log('简化拍照生成base64数据，长度:', imageDataURL.length);
+        
+        // 显示结果
+        showPhotoResult(imageDataURL);
+        
+        message(`拍照成功！分辨率: ${videoWidth}x${videoHeight}`);
+        
+      } catch (error) {
+        console.error('简化拍照失败:', error);
+        message('拍照失败');
+      }
+    }
+    
     /** 执行实际的拍照操作 */
     function performCapture(photoCanvas, photoCtx) {
       try {
+        console.log('开始执行拍照操作');
+        
         // 使用视频的实际分辨率设置canvas尺寸
         const videoWidth = video.videoWidth || canvasEle.width;
         const videoHeight = video.videoHeight || canvasEle.height;
+        
+        console.log('拍照分辨率:', videoWidth + 'x' + videoHeight);
         
         photoCanvas.width = videoWidth;
         photoCanvas.height = videoHeight;
@@ -273,6 +278,8 @@
         
         // 生成高质量base64图片
         const imageDataURL = photoCanvas.toDataURL('image/png', 0.95);
+        
+        console.log('生成base64数据，长度:', imageDataURL.length);
         
         // 显示拍照结果
         showPhotoResult(imageDataURL);
@@ -290,17 +297,41 @@
       } catch (error) {
         console.error('执行拍照失败:', error);
         message('拍照执行失败，请重试');
+        
+        // 备用方案：直接使用扫描canvas的数据
+        try {
+          console.log('尝试备用拍照方案');
+          const fallbackImageData = canvasEle.toDataURL('image/png', 0.9);
+          showPhotoResult(fallbackImageData);
+          message('拍照成功（备用模式）');
+        } catch (fallbackError) {
+          console.error('备用拍照方案也失败:', fallbackError);
+        }
       }
     }
 
     /** 显示拍照结果 */
     function showPhotoResult(base64Data) {
+      console.log('显示拍照结果，base64数据长度:', base64Data.length);
+      
       const photoResult = document.getElementById('photo-result');
       const capturedPhoto = document.getElementById('captured-photo');
       const base64Output = document.getElementById('base64-output');
       
+      if (!photoResult || !capturedPhoto || !base64Output) {
+        console.error('找不到显示元素');
+        return;
+      }
+      
       // 显示图片
       capturedPhoto.src = base64Data;
+      capturedPhoto.onload = function() {
+        console.log('图片加载成功，尺寸:', this.naturalWidth + 'x' + this.naturalHeight);
+      };
+      capturedPhoto.onerror = function() {
+        console.error('图片加载失败');
+        message('图片显示失败');
+      };
       
       // 显示base64数据
       base64Output.value = base64Data;
@@ -309,7 +340,9 @@
       photoResult.style.display = 'block';
       
       // 滚动到结果区域
-      photoResult.scrollIntoView({ behavior: 'smooth' });
+      setTimeout(() => {
+        photoResult.scrollIntoView({ behavior: 'smooth' });
+      }, 100);
     }
 
     /** 隐藏拍照结果 */
