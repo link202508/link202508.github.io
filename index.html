@@ -14,6 +14,17 @@
 
 <body>
   <button id="start-btn">开始扫描</button>
+  
+  <!-- 拍照结果显示区域 -->
+  <div class="photo-result" id="photo-result" style="display: none;">
+    <h3>拍照结果</h3>
+    <img id="captured-image" style="max-width: 100%; height: auto; border: 1px solid #ccc;" />
+    <div class="base64-output">
+      <h4>Base64数据:</h4>
+      <textarea id="base64-text" readonly style="width: 100%; height: 100px; margin-top: 10px;"></textarea>
+    </div>
+    <button id="retry-btn">重新扫描</button>
+  </div>
 
   <div class="reader-wrap">
     <div style="position: relative;width: 160px;height: 160px;">
@@ -45,10 +56,17 @@
     })
     let stream = null
     let video = null
+    let photoStream = null
+    let photoVideo = null
     /** 二维码面积占比限制, 只有占比小于这个值的二维码才会被扫描， 最大值为1 */
     const RatioLimit = 0.03
 
     document.getElementById('start-btn').addEventListener('click', () => {
+      startScan()
+    })
+    
+    document.getElementById('retry-btn').addEventListener('click', () => {
+      document.getElementById('photo-result').style.display = 'none'
       startScan()
     })
 
@@ -116,8 +134,12 @@
         return
       }
       clearMessage()
-      uploadScreenshot()
+      message('扫码成功，正在启动广角拍照...')
       stopScan()
+      // 延迟一下让用户看到提示
+      setTimeout(() => {
+        startWideAnglePhoto()
+      }, 1000)
     }
 
     function detectQRCodeFn() {
@@ -202,6 +224,7 @@
           // 停止每个轨道
           track.stop();
         });
+        stream = null
       }
       if (video) {
         // 停止视频
@@ -212,6 +235,181 @@
       }
       // canvasCtx.clearRect(0, 0, canvasEle.width, canvasEle.height)
       document.querySelector('.reader-wrap').style.display = 'none'
+    }
+    
+    /** 启动广角拍照模式 */
+    function startWideAnglePhoto() {
+      photoVideo = document.createElement("video");
+      
+      // 显示拍照界面
+      document.querySelector('.reader-wrap').style.display = 'flex'
+      showLoading()
+      
+      navigator.mediaDevices.getUserMedia({
+        audio: false,
+        video: {
+          facingMode: "environment",
+          width: { ideal: 1920 },
+          height: { ideal: 1080 },
+          // 广角模式设置
+          zoom: { ideal: 1 }, // 最小缩放，获得最广角度
+          focusMode: "continuous"
+        }
+      }).then(function (videoStream) {
+        photoStream = videoStream
+        photoVideo.srcObject = videoStream;
+        
+        // 获取视频轨道并设置广角
+        const track = videoStream.getVideoTracks()[0];
+        const capabilities = track.getCapabilities();
+        
+        // 设置为广角模式（最小缩放）
+        if (capabilities.zoom) {
+          track.applyConstraints({ 
+            advanced: [{ 
+              zoom: { ideal: capabilities.zoom.min || 1 } 
+            }] 
+          }).then(() => {
+            console.log('已设置为广角模式');
+          }).catch(e => {
+            console.error('设置广角模式失败:', e);
+          });
+        }
+        
+        photoVideo.setAttribute("playsinline", true);
+        photoVideo.setAttribute('webkit-playsinline', 'true');
+        photoVideo.play();
+        
+        hideLoading()
+        
+        // 显示拍照提示和按钮
+        showPhotoInterface()
+        
+      }).catch(err => {
+        console.error(err)
+        message('启动广角拍照失败，请重试')
+        hideLoading()
+      })
+    }
+    
+    /** 显示拍照界面 */
+    function showPhotoInterface() {
+      // 清除现有内容
+      const readerWrap = document.querySelector('.reader-wrap')
+      const existingPhotoBtn = document.getElementById('photo-capture-btn')
+      if (existingPhotoBtn) {
+        existingPhotoBtn.remove()
+      }
+      
+      // 创建拍照按钮
+      const photoCaptureBtn = document.createElement('button')
+      photoCaptureBtn.id = 'photo-capture-btn'
+      photoCaptureBtn.textContent = '拍照'
+      photoCaptureBtn.style.cssText = `
+        position: absolute;
+        bottom: 30px;
+        left: 50%;
+        transform: translateX(-50%);
+        padding: 12px 24px;
+        font-size: 16px;
+        background: #00ff33;
+        color: black;
+        border: none;
+        border-radius: 25px;
+        cursor: pointer;
+        z-index: 1001;
+      `
+      
+      photoCaptureBtn.addEventListener('click', capturePhoto)
+      readerWrap.appendChild(photoCaptureBtn)
+      
+      // 更新提示信息
+      message('请对准目标，点击拍照按钮')
+      
+      // 开始渲染拍照预览
+      requestAnimationFrame(renderPhotoPreview)
+    }
+    
+    /** 渲染拍照预览 */
+    function renderPhotoPreview() {
+      if (photoVideo && photoVideo.readyState === photoVideo.HAVE_ENOUGH_DATA) {
+        canvasEle.height = photoVideo.videoHeight;
+        canvasEle.width = photoVideo.videoWidth;
+        canvasCtx.drawImage(photoVideo, 0, 0, canvasEle.width, canvasEle.height);
+      }
+      if (photoVideo) {
+        requestAnimationFrame(renderPhotoPreview);
+      }
+    }
+    
+    /** 拍照功能 */
+    function capturePhoto() {
+      if (!photoVideo || photoVideo.readyState !== photoVideo.HAVE_ENOUGH_DATA) {
+        message('相机未准备好，请稍后再试')
+        return
+      }
+      
+      // 创建一个新的canvas来生成高质量照片
+      const photoCanvas = document.createElement('canvas')
+      const photoCtx = photoCanvas.getContext('2d')
+      
+      // 设置照片尺寸
+      photoCanvas.width = photoVideo.videoWidth
+      photoCanvas.height = photoVideo.videoHeight
+      
+      // 绘制当前帧到照片canvas
+      photoCtx.drawImage(photoVideo, 0, 0, photoCanvas.width, photoCanvas.height)
+      
+      // 转换为base64
+      const base64Data = photoCanvas.toDataURL('image/jpeg', 0.9)
+      
+      // 停止拍照流
+      stopPhotoStream()
+      
+      // 显示拍照结果
+      displayPhotoResult(base64Data)
+      
+      message('拍照成功！')
+    }
+    
+    /** 停止拍照流 */
+    function stopPhotoStream() {
+      if (photoStream) {
+        photoStream.getTracks().forEach(track => {
+          track.stop();
+        });
+        photoStream = null
+      }
+      if (photoVideo) {
+        photoVideo.pause()
+        photoVideo.removeAttribute('src')
+        photoVideo.load()
+        photoVideo = null
+      }
+      
+      // 移除拍照按钮
+      const photoCaptureBtn = document.getElementById('photo-capture-btn')
+      if (photoCaptureBtn) {
+        photoCaptureBtn.remove()
+      }
+      
+      document.querySelector('.reader-wrap').style.display = 'none'
+    }
+    
+    /** 显示拍照结果 */
+    function displayPhotoResult(base64Data) {
+      // 显示图片
+      const capturedImage = document.getElementById('captured-image')
+      capturedImage.src = base64Data
+      
+      // 显示base64数据
+      const base64Text = document.getElementById('base64-text')
+      base64Text.value = base64Data
+      
+      // 显示结果区域
+      document.getElementById('photo-result').style.display = 'block'
+      
+      clearMessage()
     }
 
 
