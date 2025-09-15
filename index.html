@@ -13,7 +13,7 @@
 </head>
 
 <body>
-  <button id="start-btn">开始扫描19</button>
+  <button id="start-btn">开始扫描119</button>
   
   <!-- 拍照结果显示区域 -->
   <div class="photo-result" id="photo-result" style="display: none;">
@@ -190,7 +190,9 @@
             })
           }
           
-          message('您需要授予相机访问权限')
+          console.error('摄像头初始化失败:', err)
+          message('无法访问摄像头，请检查：\n1. 浏览器摄像头权限\n2. 设备是否被其他应用占用\n3. 设备是否支持后置摄像头')
+          hideLoading()
         })
     }
 
