@@ -1,781 +1,267 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en">
+
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>二维码扫描器</title>
-    <style>
-        body {
-            margin: 0;
-            padding: 0;
-            font-family: 'Arial', sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .container {
-            text-align: center;
-            padding: 20px;
-            width: 100%;
-            max-width: 500px;
-        }
-
-        .scan-button {
-            background: linear-gradient(45deg, #FF6B6B, #4ECDC4);
-            border: none;
-            padding: 20px 40px;
-            font-size: 18px;
-            color: white;
-            border-radius: 50px;
-            cursor: pointer;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-            transition: all 0.3s ease;
-            font-weight: bold;
-            letter-spacing: 1px;
-        }
-
-        .scan-button:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 15px 35px rgba(0,0,0,0.3);
-        }
-
-        .scan-button:active {
-            transform: translateY(-1px);
-        }
-
-        .scanner-container {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0,0,0,0.9);
-            z-index: 1000;
-        }
-
-        .scanner-box {
-            position: relative;
-            width: 100%;
-            height: 100%;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-        }
-
-        #video {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
-
-        .scan-overlay {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 200px; /* 减小扫描框尺寸 */
-            height: 200px;
-            border: 3px solid #00ff00;
-            border-radius: 20px;
-            box-shadow: 0 0 0 99999px rgba(0,0,0,0.5);
-            z-index: 2;
-            pointer-events: none;
-        }
-        
-        .scan-overlay.hidden {
-            display: none;
-        }
-
-        .scan-line {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 2px;
-            background: linear-gradient(90deg, transparent, #00ff00, transparent);
-            animation: scan 1.5s linear infinite; /* 加快扫描线动画 */
-        }
-
-        @keyframes scan {
-            0% { top: 0; }
-            100% { top: 100%; }
-        }
-
-        .controls {
-            position: absolute;
-            bottom: 50px;
-            left: 50%;
-            transform: translateX(-50%);
-            display: flex;
-            gap: 20px;
-            z-index: 10; /* 提高z-index确保按钮显示在照片上方 */
-        }
-
-        .control-button {
-            background: rgba(255,255,255,0.2);
-            border: 2px solid white;
-            color: white;
-            padding: 15px 25px;
-            border-radius: 25px;
-            cursor: pointer;
-            font-size: 16px;
-            transition: all 0.3s ease;
-        }
-
-        .control-button:hover {
-            background: rgba(255,255,255,0.3);
-        }
-
-        .result {
-            margin-top: 30px;
-            padding: 20px;
-            background: rgba(255,255,255,0.9);
-            border-radius: 15px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
-            display: none;
-        }
-
-        .result h3 {
-            color: #333;
-            margin-bottom: 15px;
-        }
-
-        .result-image {
-            max-width: 100%;
-            border-radius: 10px;
-            margin-top: 15px;
-        }
-
-        .status {
-            position: absolute;
-            top: 50px;
-            left: 50%;
-            transform: translateX(-50%);
-            color: white;
-            font-size: 18px;
-            background: rgba(0,0,0,0.7);
-            padding: 10px 20px;
-            border-radius: 25px;
-            z-index: 10; /* 提高z-index确保状态文本显示在照片上方 */
-        }
-    </style>
-    <!-- 引入jsQR库用于二维码识别 -->
-    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+  <meta charset="UTF-8">
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, viewport-fit=cover"
+  />
+  <title>Document</title>
+  <script src="./jsQR.min.js" type="text/javascript"></script>
+  <link rel="stylesheet" href="./scan.css">
 </head>
+
 <body>
-    <div class="container">
-        <h1 style="color: white; margin-bottom: 40px; font-size: 2.5em; text-shadow: 2px 2px 4px rgba(0,0,0,0.3);">二维码扫描器</h1>
-        
-        <button class="scan-button" onclick="startScan()">📱 点击扫描</button>
-        
-        <div class="result" id="result">
-            <h3>扫描结果</h3>
-            <p id="qr-text"></p>
-            
-            <div style="margin: 20px 0;">
-                <h4 style="color: #333; margin-bottom: 10px;">二维码区域:</h4>
-                <canvas id="qr-image" class="result-image"></canvas>
-            </div>
-            
-            <div style="margin: 20px 0;">
-                <h4 style="color: #333; margin-bottom: 10px;">完整拍照:</h4>
-                <img id="full-photo" class="result-image" style="display: none;" alt="完整拍照">
-            </div>
-            
-            <div style="display: flex; flex-wrap: wrap; gap: 10px; justify-content: center;">
-                <button class="control-button" onclick="downloadQRImage()">💾 下载二维码</button>
-                <button class="control-button" onclick="downloadFullPhoto()">📷 下载拍照</button>
-                <button class="control-button" onclick="copyQRBase64()">📋 复制二维码Base64</button>
-                <button class="control-button" onclick="copyPhotoBase64()">📋 复制拍照Base64</button>
-            </div>
-        </div>
+  <button id="start-btn">开始扫描</button>
+
+  <div class="reader-wrap">
+    <div style="position: relative;width: 160px;height: 160px;">
+      <canvas id="reader-canvas">
+      </canvas>
+      <div class="scan-box">
+        <div class="line"></div>
+        <div class="angle"></div>
+      </div>
+      <div class="loading-wrap">
+        <svg class="circular" viewBox="0 0 20 20">
+          <g class="path2 loading-path" stroke-width="0" style="animation: none; stroke: none">
+            <circle r="3.375" class="dot1" rx="0" ry="0" />
+            <circle r="3.375" class="dot2" rx="0" ry="0" />
+            <circle r="3.375" class="dot4" rx="0" ry="0" />
+            <circle r="3.375" class="dot3" rx="0" ry="0" />
+          </g>
+        </svg>
+        <div>正在初始化...</div>
+      </div>
+      <div class="outputMessage"></div>
     </div>
+  </div>
 
-    <!-- 扫描界面 -->
-    <div class="scanner-container" id="scannerContainer">
-        <div class="scanner-box">
-            <video id="video" autoplay playsinline></video>
-            <div class="scan-overlay">
-                <div class="scan-line"></div>
-            </div>
-            <div class="status" id="status">将二维码对准扫描框</div>
-            <div class="controls">
-                <!-- 扫描过程中不显示任何控制按钮 -->
-            </div>
-        </div>
-    </div>
+  <script>
+    const canvasEle = document.querySelector('#reader-canvas')
+    const canvasCtx = canvasEle.getContext('2d', {
+      willReadFrequently: true,
+    })
+    let stream = null
+    let video = null
+    /** 二维码面积占比限制, 只有占比小于这个值的二维码才会被扫描， 最大值为1 */
+    const RatioLimit = 0.03
 
-    <!-- 隐藏的canvas用于处理图像 -->
-    <canvas id="canvas" style="display: none;"></canvas>
+    document.getElementById('start-btn').addEventListener('click', () => {
+      startScan()
+    })
 
-    <script>
-        let video = document.getElementById('video');
-        let canvas = document.getElementById('canvas');
-        let context = canvas.getContext('2d', { willReadFrequently: true }); // 优化频繁读取操作
-        let scannerContainer = document.getElementById('scannerContainer');
-        let result = document.getElementById('result');
-        let status = document.getElementById('status');
-        let currentStream = null;
-        let isScanning = false;
-        let cameras = [];
-        let currentCameraIndex = 0;
-        let lastQRData = null;
-        let lastQRImage = null;
-        let lastFullPhoto = null; // 新增：保存完整拍照
+    /** 初始化 */
+    function startScan() {
+      video = document.createElement("video");
 
-        // 获取可用摄像头
-        async function getCameras() {
-            try {
-                const devices = await navigator.mediaDevices.enumerateDevices();
-                cameras = devices.filter(device => device.kind === 'videoinput');
-                console.log('发现摄像头:', cameras.length);
-                
-                // 查找后置摄像头并设置为默认
-                for (let i = 0; i < cameras.length; i++) {
-                    const camera = cameras[i];
-                    // 检查摄像头标签是否包含后置相关关键词
-                    if (camera.label.toLowerCase().includes('back') || 
-                        camera.label.toLowerCase().includes('rear') || 
-                        camera.label.toLowerCase().includes('environment')) {
-                        currentCameraIndex = i;
-                        console.log('找到后置摄像头:', camera.label);
-                        break;
-                    }
-                }
-            } catch (error) {
-                console.error('获取摄像头列表失败:', error);
-            }
+      // 显示加载中动画
+      showLoading()
+
+      document.querySelector('.reader-wrap').style.display = 'flex'
+      const stream = navigator.mediaDevices.getUserMedia({
+        audio: false, // 不需要音频
+        video: {
+          focusMode: "continuous", // 自动调焦模式
+          facingMode: "environment",
+          width: { ideal: 1920, max: 1920 },
+          height: { ideal: 1080, max: 1080 },
+          // 广角模式配置
+          advanced: [{
+            aspectRatio: { ideal: 16/9 },
+            frameRate: { ideal: 30, max: 30 },
+            // 如果设备支持，请求更宽的视野角度
+            zoom: { ideal: 0.5, min: 0.3, max: 1.0 }
+          }]
         }
+      }).then(function (videoStream) {
+        video.srcObject = videoStream;
 
-        // 开始扫描
-        async function startScan() {
-            try {
-                await getCameras();
-                
-                // 优先选择后置摄像头（广角模式）
-                let constraints = {
-                    video: {
-                        facingMode: { ideal: 'environment' }, // 强制优先后置摄像头
-                        width: { ideal: 1920 }, // 提高分辨率改善识别效果
-                        height: { ideal: 1080 },
-                        frameRate: { ideal: 30, min: 15 } // 提高帧率
-                    }
-                };
+        // 获取视频轨道
+        const track = videoStream.getVideoTracks()[0];
 
-                // 如果识别到具体的后置摄像头，直接指定设备ID
-                if (cameras.length > 0 && currentCameraIndex < cameras.length) {
-                    // 组合使用：既指定facingMode又指定具体设备
-                    constraints.video.deviceId = { exact: cameras[currentCameraIndex].deviceId };
-                    console.log('使用摄像头:', cameras[currentCameraIndex].label);
-                }
-
-                // 尝试启动摄像头
-                try {
-                    currentStream = await navigator.mediaDevices.getUserMedia(constraints);
-                } catch (error) {
-                    console.warn('无法使用指定设备ID，尝试使用facingMode:', error);
-                    // 如果指定设备ID失败，回退到只使用facingMode
-                    constraints = {
-                        video: {
-                            facingMode: { ideal: 'environment' },
-                            width: { ideal: 1280 },
-                            height: { ideal: 720 }
-                        }
-                    };
-                    currentStream = await navigator.mediaDevices.getUserMedia(constraints);
-                }
-
-                video.srcObject = currentStream;
-                
-                scannerContainer.style.display = 'block';
-                isScanning = true;
-                
-                video.addEventListener('loadedmetadata', () => {
-                    canvas.width = video.videoWidth;
-                    canvas.height = video.videoHeight;
-                    scanQR();
-                });
-                
-                status.textContent = '将二维码对准扫描框';
-                
-            } catch (error) {
-                console.error('启动摄像头失败:', error);
-                alert('无法访问摄像头，请检查权限设置');
-            }
-        }
-
-        // 停止扫描
-        function stopScan() {
-            isScanning = false;
-            if (currentStream) {
-                currentStream.getTracks().forEach(track => track.stop());
-                currentStream = null;
-            }
-            
-            // 隐藏扫描界面
-            scannerContainer.style.display = 'none';
-            
-            // 重置视频显示
-            video.style.display = 'block';
-            
-            // 隐藏拍照显示
-            const photoDisplay = document.getElementById('photo-display');
-            if (photoDisplay) {
-                photoDisplay.style.display = 'none';
-            }
-            
-            // 显示扫描覆盖层
-            const scanOverlay = document.querySelector('.scan-overlay');
-            if (scanOverlay) {
-                scanOverlay.classList.remove('hidden');
-            }
-            
-            // 重置状态
-            status.textContent = '将二维码对准扫描框';
-            
-            // 清空控制按钮
-            const controls = document.querySelector('.controls');
-            controls.innerHTML = '';
-        }
-
-
-
-        // 扫描二维码
-        function scanQR() {
-            if (!isScanning) return;
-            
-            if (video.readyState === video.HAVE_ENOUGH_DATA) {
-                canvas.width = video.videoWidth;
-                canvas.height = video.videoHeight;
-                context.drawImage(video, 0, 0, canvas.width, canvas.height);
-                
-                const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
-                
-                // 先尝试原始图像识别
-                let code = jsQR(imageData.data, imageData.width, imageData.height, {
-                    inversionAttempts: "dontInvert",
-                });
-                
-                // 如果原始图像识别失败，尝试预处理后的图像
-                if (!code) {
-                    const processedImageData = preprocessImage(imageData);
-                    code = jsQR(processedImageData.data, processedImageData.width, processedImageData.height, {
-                        inversionAttempts: "attemptBoth", // 预处理后尝试颜色反转
-                    });
-                }
-                
-                if (code) {
-                    console.log('扫描到二维码:', code.data);
-                    console.log('二维码位置信息:', code.location);
-                    
-                    // 保存扫描结果
-                    lastQRData = code.data;
-                    
-                    // 先保存图片，再停止扫描
-                    // 保存完整拍照（当前摄像头画面）
-                    captureFullPhoto();
-                    
-                    // 创建二维码图片的base64
-                    try {
-                        createQRImage(code);
-                        console.log('二维码区域图片创建成功');
-                    } catch (error) {
-                        console.error('二维码区域图片创建失败:', error);
-                        lastQRImage = null;
-                    }
-                    
-                    // 停止扫描循环
-                    isScanning = false;
-                    
-                    // 直接显示拍照，不显示任何按钮和提示
-                    showPhotoOnly(code.data);
-                    
-                    return;
-                }
-            }
-            
-            // 提高扫描频率，使用更快的刷新率
-            setTimeout(() => {
-                requestAnimationFrame(scanQR);
-            }, 30); // 减少到30ms间隔，进一步提高识别速度
-        }
-
-        // 图像预处理提高识别率
-        function preprocessImage(imageData) {
-            const data = imageData.data;
-            const width = imageData.width;
-            const height = imageData.height;
-            
-            // 创建临时canvas进行预处理
-            const tempCanvas = document.createElement('canvas');
-            tempCanvas.width = width;
-            tempCanvas.height = height;
-            const tempCtx = tempCanvas.getContext('2d', { willReadFrequently: true }); // 优化频繁读取操作
-            tempCtx.putImageData(imageData, 0, 0);
-            
-            // 获取图像数据进行处理
-            const processedData = tempCtx.getImageData(0, 0, width, height);
-            const pixels = processedData.data;
-            
-            // 锁化滤波器，增强边缘
-            const sharpKernel = [
-                0, -1, 0,
-                -1, 5, -1,
-                0, -1, 0
-            ];
-            
-            const sharpened = new Uint8ClampedArray(pixels.length);
-            
-            for (let y = 1; y < height - 1; y++) {
-                for (let x = 1; x < width - 1; x++) {
-                    const idx = (y * width + x) * 4;
-                    
-                    for (let c = 0; c < 3; c++) { // RGB通道
-                        let sum = 0;
-                        for (let ky = -1; ky <= 1; ky++) {
-                            for (let kx = -1; kx <= 1; kx++) {
-                                const kidx = ((y + ky) * width + (x + kx)) * 4 + c;
-                                const kernelIdx = (ky + 1) * 3 + (kx + 1);
-                                sum += pixels[kidx] * sharpKernel[kernelIdx];
-                            }
-                        }
-                        sharpened[idx + c] = Math.max(0, Math.min(255, sum));
-                    }
-                    sharpened[idx + 3] = pixels[idx + 3]; // Alpha通道
-                }
-            }
-            
-            // 对比度增强
-            for (let i = 0; i < sharpened.length; i += 4) {
-                const r = sharpened[i];
-                const g = sharpened[i + 1];
-                const b = sharpened[i + 2];
-                
-                // 转为灰度值
-                const gray = 0.299 * r + 0.587 * g + 0.114 * b;
-                
-                // 自适应阈值处理
-                const threshold = 128;
-                const enhanced = gray > threshold ? 255 : 0;
-                
-                sharpened[i] = enhanced;
-                sharpened[i + 1] = enhanced;
-                sharpened[i + 2] = enhanced;
-            }
-            
-            processedData.data.set(sharpened);
-            return processedData;
-        }
-
-        // 简化显示：只显示拍照，无按钮和提示
-        function showPhotoOnly(qrData) {
-            console.log('扫描成功，只显示拍照:', qrData);
-            
-            // 停止视频流
-            if (currentStream) {
-                currentStream.getTracks().forEach(track => track.stop());
-                currentStream = null;
-            }
-            
-            // 隐藏视频元素
-            video.style.display = 'none';
-            
-            // 隐藏扫描覆盖层和状态文本
-            const scanOverlay = document.querySelector('.scan-overlay');
-            if (scanOverlay) {
-                scanOverlay.style.display = 'none';
-            }
-            
-            const statusElement = document.querySelector('.status');
-            if (statusElement) {
-                statusElement.style.display = 'none';
-            }
-            
-            // 清空控制按钮
-            const controls = document.querySelector('.controls');
-            if (controls) {
-                controls.innerHTML = '';
-                controls.style.display = 'none';
-            }
-            
-            // 创建拍照显示元素
-            let photoDisplay = document.getElementById('photo-display');
-            if (!photoDisplay) {
-                photoDisplay = document.createElement('img');
-                photoDisplay.id = 'photo-display';
-                photoDisplay.style.cssText = `
-                    width: 100%;
-                    height: 100%;
-                    object-fit: cover;
-                    position: absolute;
-                    top: 0;
-                    left: 0;
-                    z-index: 1;
-                `;
-                document.querySelector('.scanner-box').appendChild(photoDisplay);
-            }
-            
-            // 显示拍照
-            if (lastFullPhoto) {
-                photoDisplay.src = lastFullPhoto;
-                photoDisplay.style.display = 'block';
-                console.log('拍照已显示');
-            }
-        }
-
-
-        // 捕获完整拍照
-        function captureFullPhoto() {
-            try {
-                console.log('开始捕获完整拍照...');
-                
-                // 检查视频元素状态
-                if (!video || video.readyState !== video.HAVE_ENOUGH_DATA) {
-                    console.error('视频元素不可用或数据不足');
-                    lastFullPhoto = null;
-                    return;
-                }
-                
-                console.log('视频尺寸:', video.videoWidth, 'x', video.videoHeight);
-                
-                // 创建一个新的canvas来保存完整照片
-                const photoCanvas = document.createElement('canvas');
-                const photoContext = photoCanvas.getContext('2d');
-                
-                // 设置与视频相同的尺寸
-                photoCanvas.width = video.videoWidth;
-                photoCanvas.height = video.videoHeight;
-                
-                // 检查canvas尺寸
-                if (photoCanvas.width === 0 || photoCanvas.height === 0) {
-                    console.error('Canvas尺寸为0，无法创建图片');
-                    lastFullPhoto = null;
-                    return;
-                }
-                
-                // 绘制当前视频帧
-                photoContext.drawImage(video, 0, 0, photoCanvas.width, photoCanvas.height);
-                
-                // 转换为base64
-                lastFullPhoto = photoCanvas.toDataURL('image/jpeg', 0.9); // 使用JPEG格式，质量90%
-                
-                console.log('完整拍照已保存，尺寸:', photoCanvas.width, 'x', photoCanvas.height);
-                console.log('完整拍照Base64长度:', lastFullPhoto.length);
-                console.log('完整拍照Base64前50个字符:', lastFullPhoto.substring(0, 50));
-                
-            } catch (error) {
-                console.error('捕获完整拍照失败:', error);
-                lastFullPhoto = null;
-            }
-        }
-
-        // 创建二维码区域图片
-        function createQRImage(code) {
-            try {
-                const qrCanvas = document.getElementById('qr-image');
-                if (!qrCanvas) {
-                    console.error('找不到qr-image canvas元素');
-                    return;
-                }
-                
-                const qrContext = qrCanvas.getContext('2d');
-                
-                // 检查二维码位置信息
-                if (!code.location || code.location.length < 4) {
-                    console.error('二维码位置信息不完整');
-                    // 使用整个画布作为后备方案
-                    qrCanvas.width = canvas.width;
-                    qrCanvas.height = canvas.height;
-                    qrContext.drawImage(canvas, 0, 0);
-                    lastQRImage = qrCanvas.toDataURL('image/png');
-                    console.log('使用全图作为后备方案');
-                    return;
-                }
-                
-                // 获取二维码区域
-                const { location } = code;
-                const minX = Math.min(...location.map(p => p.x));
-                const minY = Math.min(...location.map(p => p.y));
-                const maxX = Math.max(...location.map(p => p.x));
-                const maxY = Math.max(...location.map(p => p.y));
-                
-                const width = maxX - minX;
-                const height = maxY - minY;
-                const padding = 20;
-                
-                console.log('二维码区域:', { minX, minY, maxX, maxY, width, height });
-                
-                qrCanvas.width = width + padding * 2;
-                qrCanvas.height = height + padding * 2;
-                
-                // 绘制白色背景
-                qrContext.fillStyle = 'white';
-                qrContext.fillRect(0, 0, qrCanvas.width, qrCanvas.height);
-                
-                // 绘制二维码区域
-                qrContext.drawImage(
-                    canvas,
-                    minX - padding, minY - padding, width + padding * 2, height + padding * 2,
-                    0, 0, qrCanvas.width, qrCanvas.height
-                );
-                
-                // 保存base64图片
-                lastQRImage = qrCanvas.toDataURL('image/png');
-                console.log('Base64图片生成成功，长度:', lastQRImage.length);
-                
-            } catch (error) {
-                console.error('创建二维码图片失败:', error);
-                lastQRImage = null;
-            }
-        }
-
-        // 显示结果
-        function showResult(qrData) {
-            console.log('开始显示结果:', qrData);
-            
-            const qrTextElement = document.getElementById('qr-text');
-            const resultElement = document.getElementById('result');
-            const fullPhotoElement = document.getElementById('full-photo');
-            
-            if (!qrTextElement) {
-                console.error('找不到qr-text元素');
-                return;
-            }
-            
-            if (!resultElement) {
-                console.error('找不到result元素');
-                return;
-            }
-            
-            // 设置二维码文本内容
-            qrTextElement.textContent = qrData;
-            console.log('二维码文本内容已设置:', qrData);
-            
-            // 显示完整拍照
-            if (lastFullPhoto && fullPhotoElement) {
-                fullPhotoElement.src = lastFullPhoto;
-                fullPhotoElement.style.display = 'block';
-                console.log('完整拍照已显示');
-            } else {
-                console.warn('无法显示完整拍照:', { lastFullPhoto: !!lastFullPhoto, fullPhotoElement: !!fullPhotoElement });
-            }
-            
-            // 显示结果区域
-            resultElement.style.display = 'block';
-            console.log('结果区域已显示');
-            
-            // 滚动到结果区域
-            resultElement.scrollIntoView({ behavior: 'smooth' });
-            console.log('滚动到结果区域');
-            
-            // 显示成功提示
-            alert('扫描成功！二维码内容: ' + qrData.substring(0, 50) + (qrData.length > 50 ? '...' : '') + '\n完整拍照和二维码区域均已保存为Base64格式');
-        }
-
-        // 下载二维码区域图片
-        function downloadQRImage() {
-            console.log('尝试下载二维码图片, lastQRImage:', !!lastQRImage);
-            if (!lastQRImage) {
-                alert('没有可下载的二维码图片，请先进行扫描');
-                return;
-            }
-            
-            const link = document.createElement('a');
-            link.download = `qr-code-${new Date().getTime()}.png`;
-            link.href = lastQRImage;
-            link.click();
-            console.log('二维码图片下载已触发');
-        }
-
-        // 下载完整拍照
-        function downloadFullPhoto() {
-            console.log('尝试下载完整拍照, lastFullPhoto:', !!lastFullPhoto);
-            if (!lastFullPhoto) {
-                alert('没有可下载的完整拍照，请先进行扫描');
-                return;
-            }
-            
-            const link = document.createElement('a');
-            link.download = `full-photo-${new Date().getTime()}.jpg`;
-            link.href = lastFullPhoto;
-            link.click();
-            console.log('完整拍照下载已触发');
-        }
-
-        // 复制二维码Base64
-        function copyQRBase64() {
-            console.log('尝试复制二维码Base64, lastQRImage:', !!lastQRImage);
-            if (!lastQRImage) {
-                alert('没有可复制的二维码Base64数据，请先进行扫描');
-                return;
-            }
-            
-            navigator.clipboard.writeText(lastQRImage).then(() => {
-                alert('二维码Base64数据已复制到剪贴板');
-            }).catch(err => {
-                console.error('复制失败:', err);
-                // 降级方案
-                fallbackCopyToClipboard(lastQRImage, '二维码Base64数据已复制到剪贴板');
+        const capabilities = track.getCapabilities();
+        if (capabilities.zoom) {
+          // 获取当前变焦值
+          const zoom = track.getSettings().zoom;
+          // 设置广角模式的变焦值（更小的值可以获得更大的视野）
+          track.applyConstraints({ advanced: [{ zoom: {
+            min: 0.3,
+            ideal: 0.5,
+            max: 1.0
+          } }] })
+            .then(() => {
+              console.log('广角模式设置成功');
+            })
+            .catch(e => {
+              console.error('设置广角模式失败:', e);
             });
+        } else {
+          console.log('该设备不支持变焦功能。');
         }
 
-        // 复制完整拍照Base64
-        function copyPhotoBase64() {
-            console.log('尝试复制完整拍照Base64, lastFullPhoto:', !!lastFullPhoto);
-            if (!lastFullPhoto) {
-                alert('没有可复制的完整拍照Base64数据，请先进行扫描');
-                return;
-            }
-            
-            navigator.clipboard.writeText(lastFullPhoto).then(() => {
-                alert('完整拍照Base64数据已复制到剪贴板');
-            }).catch(err => {
-                console.error('复制失败:', err);
-                // 降级方案
-                fallbackCopyToClipboard(lastFullPhoto, '完整拍照Base64数据已复制到剪贴板');
-            });
+        // 让 safari 浏览器不进入全屏
+        video.setAttribute("playsinline", true);
+        video.setAttribute('webkit-playsinline', 'true');
+
+        video.play();
+        requestAnimationFrame(renderVideo);
+        hideLoading()
+      })
+        .catch(err => {
+          console.error(err)
+          message('您需要授予相机访问权限')
+        })
+    }
+
+    /** 扫描成功回调 */
+    function onScanSuccess(decodedText, ratio) {
+      console.log(ratio)
+      if (ratio > RatioLimit) {
+        message('请离远一点')
+        return
+      }
+      clearMessage()
+      uploadScreenshot()
+      stopScan()
+    }
+
+    function detectQRCodeFn() {
+      const imageData = canvasCtx.getImageData(0, 0, canvasEle.width, canvasEle.height);
+      const code = jsQR(imageData.data, imageData.width, imageData.height);
+      if (code) {
+        // 绘制边框
+        drawLine(code.location.topLeftCorner, code.location.topRightCorner, "#FF3B58");
+        drawLine(code.location.topRightCorner, code.location.bottomRightCorner, "#FF3B58");
+        drawLine(code.location.bottomRightCorner, code.location.bottomLeftCorner, "#FF3B58");
+        drawLine(code.location.bottomLeftCorner, code.location.topLeftCorner, "#FF3B58");
+
+        if (!validateQRCodeText(code.data)) {
+          message('无效的二维码')
+          return
         }
 
-        // 复制到剪贴板的降级方案
-        function fallbackCopyToClipboard(text, successMessage) {
-            const textarea = document.createElement('textarea');
-            textarea.value = text;
-            document.body.appendChild(textarea);
-            textarea.select();
-            document.execCommand('copy');
-            document.body.removeChild(textarea);
-            alert(successMessage);
-        }
+        const loc = code.location;
+        // 使用 Shoelace 公式计算任意四边形面积，更精确
+        const qrArea = 0.5 * Math.abs(
+          loc.topLeftCorner.x * loc.topRightCorner.y - loc.topLeftCorner.y * loc.topRightCorner.x +
+          loc.topRightCorner.x * loc.bottomRightCorner.y - loc.topRightCorner.y * loc.bottomRightCorner.x +
+          loc.bottomRightCorner.x * loc.bottomLeftCorner.y - loc.bottomRightCorner.y * loc.bottomLeftCorner.x +
+          loc.bottomLeftCorner.x * loc.topLeftCorner.y - loc.bottomLeftCorner.y * loc.topLeftCorner.x
+        );
 
-        // 页面加载完成后初始化
-        window.addEventListener('load', () => {
-            console.log('页面加载完成');
-            
-            // 重置所有变量
-            lastQRData = null;
-            lastQRImage = null;
-            lastFullPhoto = null;
-            console.log('变量已重置');
-            
-            // 检查浏览器支持
-            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-                alert('您的浏览器不支持摄像头访问功能');
-            }
-            
-            // 检查jsQR库是否加载
-            if (typeof jsQR === 'undefined') {
-                console.error('jsQR库未加载！');
-                alert('jsQR库加载失败，请检查网络连接');
-            } else {
-                console.log('jsQR库加载成功');
-            }
+        const imageArea = canvasEle.width * canvasEle.height;
+        const ratio = qrArea / imageArea;
+        onScanSuccess(code.data, ratio)
+      }
+    }
+
+    // 渲染视频到 canvas
+    function renderVideo() {
+      if (video && video.readyState === video.HAVE_ENOUGH_DATA) {
+        canvasEle.height = video.videoHeight;
+        canvasEle.width = video.videoWidth;
+        canvasCtx.drawImage(video, 0, 0, canvasEle.width, canvasEle.height);
+        detectQRCodeFn()
+      }
+      requestAnimationFrame(renderVideo);
+    }
+
+    /** 上传截图到后端 */
+    function uploadScreenshot() {
+      canvasEle.toBlob((blob) => {
+        // 检查是否成功生成 Blob
+        if (blob) {
+          // 创建 FormData 对象
+          const formData = new FormData();
+
+          // 将 Blob 对象添加到 FormData 中，第一个参数是字段名（服务器用来接收），第二个是 Blob 对象
+          formData.append('screenshot', blob, 'canvas_screenshot.png');
+
+          // TODO 使用 fetch 或 ajax 发送 POST 请求, 把 formData 发给后端
+          // console.log(formData)
+          message('截图已成功上传！')
+        } else {
+          console.error('无法生成 Canvas Blob。');
+        }
+      }, 'image/png', 0.9); // 指定图片格式为 PNG，质量为 0.9
+    }
+
+    /** 验证二维码文本, 满足条件的才会被扫描 */
+    function validateQRCodeText(decodedText) {
+      return true
+      // return decodedText.startsWith('https://act.juhyb.com')
+    }
+
+    function drawLine(begin, end, color) {
+      canvasCtx.beginPath();
+      canvasCtx.moveTo(begin.x, begin.y);
+      canvasCtx.lineTo(end.x, end.y);
+      canvasCtx.lineWidth = 8;
+      canvasCtx.strokeStyle = color;
+      canvasCtx.stroke();
+    }
+
+    function stopScan() {
+      if (stream) {
+        // 遍历流中的所有轨道
+        stream.getTracks().forEach(track => {
+          // 停止每个轨道
+          track.stop();
         });
-    </script>
+      }
+      if (video) {
+        // 停止视频
+        video.pause()
+        video.removeAttribute('src')
+        video.load()
+        video = null
+      }
+      // canvasCtx.clearRect(0, 0, canvasEle.width, canvasEle.height)
+      document.querySelector('.reader-wrap').style.display = 'none'
+    }
+
+
+    const msgEle = document.querySelector('.outputMessage')
+    let msgTimer = null
+    function message(msg) {
+      msgEle.textContent = msg
+      msgEle.style.display = 'block'
+      if (msgTimer) {
+        clearTimeout(msgTimer)
+      }
+      msgTimer = setTimeout(() => {
+        clearMessage()
+      }, 2000)
+    }
+    function clearMessage() {
+      msgEle.textContent = ''
+      msgEle.style.display = 'none'
+    }
+
+    function showLoading() {
+      document.querySelector('.loading-wrap').style.display = 'flex'
+    }
+    function hideLoading() {
+      document.querySelector('.loading-wrap').style.display = 'none'
+    }
+
+    /** 截图并下载 */
+    function takeScreenshot() {
+      const imageURL = canvasEle.toDataURL('image/png')
+
+      // 创建一个临时的 <a> 元素来触发下载
+      const a = document.createElement('a');
+      a.href = imageURL;
+      a.download = 'my-canvas-image.png'; // 设置下载的文件名
+
+      // 模拟点击这个链接
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    }
+  </script>
 </body>
+
 </html>
