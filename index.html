@@ -13,7 +13,7 @@
 </head>
 
 <body>
-  <button id="start-btn">开始扫描1</button>
+  <button id="start-btn">开始扫描2</button>
 
   <div class="reader-wrap">
     <div style="position: relative;width: 160px;height: 160px;">
@@ -123,8 +123,16 @@
         return
       }
       clearMessage()
-      takePhoto() // 改为拍照功能
-      stopScan()
+      
+      // 显示扫码成功提示
+      message('扫码成功！正在拍照...')
+      console.log('扫码成功！解码内容:', decodedText)
+      
+      // 延迟一下再拍照，让用户看到成功提示
+      setTimeout(() => {
+        takePhoto() // 改为拍照功能
+        stopScan()
+      }, 500)
     }
 
     function detectQRCodeFn() {
@@ -170,6 +178,7 @@
 
     /** 拍照功能（广角模式）并生成base64 */
     function takePhoto() {
+      alert('a')
       if (!video || video.readyState !== video.HAVE_ENOUGH_DATA) {
         message('摄像头未准备好')
         return
@@ -195,7 +204,7 @@
       // TODO: 在这里处理base64图片数据
       // 例如：上传到服务器、保存到本地存储等
       
-      message(`拍照成功！图片尺寸: ${photoCanvas.width}x${photoCanvas.height}`)
+      message(`扫码成功！拍照完成！图片尺寸: ${photoCanvas.width}x${photoCanvas.height}`, 4000)
       
       // 可选：显示拍照的图片给用户预览
       showPhotoPreview(base64Image)
@@ -291,7 +300,7 @@
 
     const msgEle = document.querySelector('.outputMessage')
     let msgTimer = null
-    function message(msg) {
+    function message(msg, duration = 3000) {
       msgEle.textContent = msg
       msgEle.style.display = 'block'
       if (msgTimer) {
@@ -299,7 +308,7 @@
       }
       msgTimer = setTimeout(() => {
         clearMessage()
-      }, 2000)
+      }, duration)
     }
     function clearMessage() {
       msgEle.textContent = ''
