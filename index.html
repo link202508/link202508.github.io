@@ -13,7 +13,7 @@
 </head>
 
 <body>
-  <button id="start-btn">开始扫描6</button>
+  <button id="start-btn">开始扫描7</button>
   
   <!-- 拍照结果显示区域 -->
   <div class="photo-result" id="photo-result" style="display: none;">
@@ -251,15 +251,12 @@
       navigator.mediaDevices.getUserMedia({
         audio: false,
         video: {
-          facingMode: "environment", // 后置摄像头
-          width: { ideal: 1920, max: 3840 }, // 高分辨率
-          height: { ideal: 1080, max: 2160 },
-          // 广角模式设置 - 使用最小缩放获得最大视野
-          zoom: { ideal: 1, min: 1 }, // 最小缩放，获得最广角度
-          focusMode: "continuous",
-          // 尝试获取超广角镜头
-          aspectRatio: { ideal: 16/9 },
-          frameRate: { ideal: 30 }
+          facingMode: "environment",
+          width: { ideal: 1920 },
+          height: { ideal: 1080 },
+          // 广角模式设置
+          zoom: { ideal: 1 }, // 最小缩放，获得最广角度
+          focusMode: "continuous"
         }
       }).then(function (videoStream) {
         photoStream = videoStream
@@ -268,40 +265,18 @@
         // 获取视频轨道并设置广角
         const track = videoStream.getVideoTracks()[0];
         const capabilities = track.getCapabilities();
-        console.log('相机能力:', capabilities);
         
         // 设置为广角模式（最小缩放）
-        const constraints = { advanced: [] };
-        
         if (capabilities.zoom) {
-          // 使用最小缩放值获得最大视野
-          const minZoom = capabilities.zoom.min || 1;
-          constraints.advanced.push({ zoom: { exact: minZoom } });
-          console.log('设置缩放值为:', minZoom);
-        }
-        
-        // 如果支持焦距控制，设置为最短焦距（广角）
-        if (capabilities.focusDistance) {
-          const minFocusDistance = capabilities.focusDistance.min;
-          if (minFocusDistance) {
-            constraints.advanced.push({ focusDistance: { exact: minFocusDistance } });
-            console.log('设置焦距为:', minFocusDistance);
-          }
-        }
-        
-        // 应用广角约束
-        if (constraints.advanced.length > 0) {
-          track.applyConstraints(constraints)
-            .then(() => {
-              console.log('已成功设置为广角模式');
-              const settings = track.getSettings();
-              console.log('当前相机设置:', settings);
-            })
-            .catch(e => {
-              console.error('设置广角模式失败:', e);
-            });
-        } else {
-          console.log('该设备不支持缩放控制，使用默认广角设置');
+          track.applyConstraints({ 
+            advanced: [{ 
+              zoom: { ideal: capabilities.zoom.min || 1 } 
+            }] 
+          }).then(() => {
+            console.log('已设置为广角模式');
+          }).catch(e => {
+            console.error('设置广角模式失败:', e);
+          });
         }
         
         photoVideo.setAttribute("playsinline", true);
@@ -314,7 +289,7 @@
         showCountdownAndAutoCapture()
         
       }).catch(err => {
-        console.error('启动广角拍照失败:', err)
+        console.error(err)
         message('启动广角拍照失败，请重试')
         hideLoading()
       })
