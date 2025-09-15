@@ -13,7 +13,7 @@
 </head>
 
 <body>
-  <button id="start-btn">开始扫描119</button>
+  <button id="start-btn">开始扫描120</button>
   
   <!-- 拍照结果显示区域 -->
   <div class="photo-result" id="photo-result" style="display: none;">
@@ -103,8 +103,8 @@
         audio: false, // 不需要音频
         video: {
           focusMode: "continuous", // 自动调焦模式
-          // 明确指定使用后置摄像头
-          facingMode: { exact: "environment" },
+          // 优先使用后置摄像头，但不强制
+          facingMode: "environment",
           width: 800,
           height: 800,
         }
@@ -146,53 +146,29 @@
         hideLoading()
       })
         .catch(err => {
-          console.error(err)
-          // 如果严格后置摄像头模式失败，尝试普通后置摄像头设置
-          if (err.name === 'OverconstrainedError' || err.name === 'NotFoundError') {
-            console.log('严格后置摄像头模式失败，尝试普通后置摄像头模式')
-            return navigator.mediaDevices.getUserMedia({
-              audio: false,
-              video: {
-                focusMode: "continuous",
-                facingMode: "environment", // 普通后置摄像头设置
-                width: 800,
-                height: 800,
-              }
-            }).then(function (videoStream) {
-              // 保存共享的摄像头流
-              sharedCameraStream = videoStream
-              stream = videoStream
-              video.srcObject = videoStream;
-              
-              const track = videoStream.getVideoTracks()[0];
-              const capabilities = track.getCapabilities();
-              if (capabilities.zoom) {
-                track.applyConstraints({ advanced: [{ zoom: {
-                  min: 2,
-                  ideal: 3,
-                  max: 3.5
-                } }] })
-                  .then(() => {
-                    console.log('变焦已成功');
-                  })
-                  .catch(e => {
-                    console.error('设置变焦失败:', e);
-                  });
-              } else {
-                console.log('该设备不支持变焦功能。');
-              }
-              
-              video.setAttribute("playsinline", true);
-              video.setAttribute('webkit-playsinline', 'true');
-              video.play();
-              requestAnimationFrame(renderVideo);
-              hideLoading()
-            })
-          }
-          
-          console.error('摄像头初始化失败:', err)
-          message('无法访问摄像头，请检查：\n1. 浏览器摄像头权限\n2. 设备是否被其他应用占用\n3. 设备是否支持后置摄像头')
-          hideLoading()
+          console.error('第一次尝试失败:', err)
+          // 如果上面失败，尝试最简单的配置
+          console.log('尝试简化摄像头配置');
+          return navigator.mediaDevices.getUserMedia({
+            audio: false,
+            video: true // 最简单的配置
+          }).then(function (videoStream) {
+            console.log('使用简化摄像头配置成功')
+            // 保存共享的摄像头流
+            sharedCameraStream = videoStream
+            stream = videoStream
+            video.srcObject = videoStream;
+            
+            video.setAttribute("playsinline", true);
+            video.setAttribute('webkit-playsinline', 'true');
+            video.play();
+            requestAnimationFrame(renderVideo);
+            hideLoading()
+          }).catch(err2 => {
+            console.error('第二次尝试也失败:', err2);
+            message('无法访问摄像头，请检查浏览器权限设置');
+            hideLoading();
+          });
         })
     }
 
