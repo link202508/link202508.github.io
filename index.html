@@ -13,7 +13,7 @@
 </head>
 
 <body>
-  <button id="start-btn">开始扫描3</button>
+  <button id="start-btn">开始扫描4</button>
   
   <!-- 拍照结果显示区域 -->
   <div class="photo-result" id="photo-result" style="display: none;">
@@ -207,7 +207,8 @@
     function validateQRCodeText(decodedText) {
       alert(decodedText)
       // return decodedText.startsWith('https://act.juhyb.com')
-      return decodedText.startsWith('.')
+      return decodedText.startsWith('https://')
+
 
     }
 
