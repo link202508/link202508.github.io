@@ -13,7 +13,8 @@
 </head>
 
 <body>
-  <button id="start-btn">开始广角扫码</button>
+  <button id="start-btn">开始广角扫码1</button>
+  <button id="test-photo-btn" style="margin-left: 10px; padding: 10px 20px; background: #ffc107; color: black; border: none; border-radius: 5px; cursor: pointer;">测试拍照</button>
 
   <div class="reader-wrap">
     <div style="position: relative;width: 160px;height: 160px;">
@@ -62,6 +63,16 @@
 
     document.getElementById('start-btn').addEventListener('click', () => {
       startScan()
+    })
+
+    // 测试拍照按钮事件
+    document.getElementById('test-photo-btn').addEventListener('click', () => {
+      if (video && isScanning) {
+        console.log('手动触发测试拍照');
+        capturePhoto();
+      } else {
+        message('请先开始扫描');
+      }
     })
 
     // 保存图片按钮事件
@@ -323,13 +334,34 @@
       try {
         console.log('执行简化拍照');
         
+        if (!video) {
+          console.error('视频元素不存在');
+          message('摄像头未就绪');
+          return;
+        }
+        
+        console.log('视频状态:', video.readyState);
+        console.log('视频尺寸:', video.videoWidth + 'x' + video.videoHeight);
+        
         // 创建拍照canvas
         const photoCanvas = document.createElement('canvas');
         const photoCtx = photoCanvas.getContext('2d');
         
-        // 使用当前视频尺寸
-        const videoWidth = video.videoWidth || 800;
-        const videoHeight = video.videoHeight || 800;
+        if (!photoCtx) {
+          console.error('无法获取canvas上下文');
+          return;
+        }
+        
+        // 使用当前视频尺寸，如果不可用则使用默认值
+        let videoWidth = video.videoWidth;
+        let videoHeight = video.videoHeight;
+        
+        // 如果视频尺寸为0，尝试使用canvas尺寸
+        if (!videoWidth || !videoHeight) {
+          videoWidth = canvasEle.width || 800;
+          videoHeight = canvasEle.height || 800;
+          console.log('使用canvas尺寸:', videoWidth + 'x' + videoHeight);
+        }
         
         photoCanvas.width = videoWidth;
         photoCanvas.height = videoHeight;
@@ -339,10 +371,34 @@
         // 绘制当前视频帧
         photoCtx.drawImage(video, 0, 0, videoWidth, videoHeight);
         
+        // 检查canvas是否有内容
+        const imageData = photoCtx.getImageData(0, 0, videoWidth, videoHeight);
+        const hasContent = imageData.data.some(pixel => pixel !== 0);
+        console.log('Canvas是否有内容:', hasContent);
+        
+        if (!hasContent) {
+          console.warn('绘制的canvas为空，尝试备用方案');
+          // 尝试使用扫码canvas的数据
+          const fallbackImageData = canvasEle.toDataURL('image/png', 0.9);
+          if (fallbackImageData && fallbackImageData.length > 100) {
+            showPhotoResult(fallbackImageData);
+            message('拍照成功（使用扫码视图）');
+            return;
+          }
+        }
+        
         // 生成base64
         const imageDataURL = photoCanvas.toDataURL('image/png', 0.9);
         
-        console.log('简化拍照生成base64数据，长度:', imageDataURL.length);
+        console.log('简化拍照生成base64数据');
+        console.log('base64长度:', imageDataURL.length);
+        console.log('base64前缀:', imageDataURL.substring(0, 50));
+        
+        if (!imageDataURL || imageDataURL.length < 100) {
+          console.error('生成的base64数据无效');
+          message('生成图片数据失败');
+          return;
+        }
         
         // 显示结果
         showPhotoResult(imageDataURL);
@@ -351,7 +407,22 @@
         
       } catch (error) {
         console.error('简化拍照失败:', error);
-        message('拍照失败');
+        message('拍照失败: ' + error.message);
+        
+        // 最后的备用方案：使用扫码canvas
+        try {
+          console.log('使用最后的备用方案');
+          const emergencyImageData = canvasEle.toDataURL('image/png', 0.8);
+          if (emergencyImageData && emergencyImageData.length > 100) {
+            showPhotoResult(emergencyImageData);
+            message('拍照成功（紧急模式）');
+          } else {
+            message('所有拍照方案都失败');
+          }
+        } catch (emergencyError) {
+          console.error('紧急备用方案也失败:', emergencyError);
+          message('拍照功能不可用');
+        }
       }
     }
     
@@ -408,37 +479,89 @@
 
     /** 显示拍照结果 */
     function showPhotoResult(base64Data) {
-      console.log('显示拍照结果，base64数据长度:', base64Data.length);
+      console.log('开始显示拍照结果');
+      console.log('base64数据类型:', typeof base64Data);
+      console.log('base64数据长度:', base64Data ? base64Data.length : 0);
+      console.log('base64数据前100个字符:', base64Data ? base64Data.substring(0, 100) : 'null');
+      
+      if (!base64Data || base64Data.length < 100) {
+        console.error('无效的base64数据');
+        message('生成图片数据失败');
+        return;
+      }
       
       const photoResult = document.getElementById('photo-result');
       const capturedPhoto = document.getElementById('captured-photo');
       const base64Output = document.getElementById('base64-output');
       
+      console.log('查找显示元素:');
+      console.log('photoResult:', photoResult ? '找到' : '未找到');
+      console.log('capturedPhoto:', capturedPhoto ? '找到' : '未找到');
+      console.log('base64Output:', base64Output ? '找到' : '未找到');
+      
       if (!photoResult || !capturedPhoto || !base64Output) {
-        console.error('找不到显示元素');
-        return;
+        console.error('找不到显示元素，尝试创建元素');
+        
+        // 如果元素不存在，尝试动态创建
+        if (!photoResult) {
+          const newPhotoResult = document.createElement('div');
+          newPhotoResult.id = 'photo-result';
+          newPhotoResult.innerHTML = `
+            <h3>拍照结果</h3>
+            <img id="captured-photo" style="max-width: 100%; max-height: 400px; border: 2px solid #ccc; border-radius: 10px;" />
+            <div style="margin-top: 10px;">
+              <button id="save-photo-btn" style="padding: 10px 20px; margin: 5px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer;">保存图片</button>
+              <button id="restart-scan-btn" style="padding: 10px 20px; margin: 5px; background: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer;">重新扫描</button>
+            </div>
+            <textarea id="base64-output" placeholder="Base64 图片数据将显示在这里..." style="width: 100%; height: 100px; margin-top: 10px; padding: 10px; border: 1px solid #ccc; border-radius: 5px; resize: vertical;"></textarea>
+          `;
+          newPhotoResult.style.cssText = 'display: none; margin-top: 20px; text-align: center;';
+          document.body.appendChild(newPhotoResult);
+          
+          // 重新获取元素引用
+          photoResult = newPhotoResult;
+          capturedPhoto = document.getElementById('captured-photo');
+          base64Output = document.getElementById('base64-output');
+          
+          console.log('动态创建元素完成');
+        }
+        
+        if (!photoResult || !capturedPhoto || !base64Output) {
+          console.error('仍然找不到显示元素，放弃显示');
+          return;
+        }
       }
+      
+      console.log('开始设置图片源');
       
       // 显示图片
       capturedPhoto.src = base64Data;
       capturedPhoto.onload = function() {
-        console.log('图片加载成功，尺寸:', this.naturalWidth + 'x' + this.naturalHeight);
+        console.log('图片加载成功！');
+        console.log('图片尺寸:', this.naturalWidth + 'x' + this.naturalHeight);
+        console.log('图片元素尺寸:', this.width + 'x' + this.height);
       };
-      capturedPhoto.onerror = function() {
-        console.error('图片加载失败');
+      capturedPhoto.onerror = function(e) {
+        console.error('图片加载失败:', e);
+        console.error('图片src:', this.src.substring(0, 100));
         message('图片显示失败');
       };
       
       // 显示base64数据
       base64Output.value = base64Data;
+      console.log('设置base64输出完成');
       
       // 显示结果区域
       photoResult.style.display = 'block';
+      console.log('显示结果区域');
       
       // 滚动到结果区域
       setTimeout(() => {
+        console.log('滚动到结果区域');
         photoResult.scrollIntoView({ behavior: 'smooth' });
-      }, 100);
+      }, 200);
+      
+      console.log('显示拍照结果完成');
     }
 
     /** 隐藏拍照结果 */
